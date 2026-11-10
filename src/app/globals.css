@@ -1,26 +1,101 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #faf6ef;
+  --foreground: #1e1a15;
+  --card: #ffffff;
+  --muted: #7a6f63;
+  --line: #eae3d8;
+  --terracotta: #b85c3e;
+  --terracotta-deep: #8c3e28;
+  --saffron: #d89b3d;
+  --olive: #5e7a4b;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --color-card: var(--card);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-terracotta: var(--terracotta);
+  --color-terracotta-deep: var(--terracotta-deep);
+  --color-saffron: var(--saffron);
+  --color-olive: var(--olive);
+  --font-sans: var(--font-outfit), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-fraunces), Georgia, serif;
+  --font-arabic: var(--font-naskh), "Noto Naskh Arabic", serif;
 }
 
 body {
-  background: var(--background);
+  background:
+    radial-gradient(1000px 420px at 0% -10%, rgb(216 155 61 / 18%), transparent 55%),
+    radial-gradient(800px 380px at 100% 0%, rgb(184 92 62 / 10%), transparent 46%),
+    var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans);
+}
+
+::selection {
+  background: #f0c9b4;
+}
+
+dialog {
+  width: min(32rem, calc(100% - 2rem));
+  margin: auto;
+  border: 0;
+  padding: 0;
+  background: transparent;
+}
+
+dialog::backdrop {
+  background: rgb(28 22 18 / 48%);
+}
+
+html[lang="ar"] body {
+  font-family: var(--font-arabic);
+  font-size: 1.125rem;
+  line-height: 1.75;
+}
+
+html[lang="ar"] .font-display {
+  font-family: var(--font-arabic);
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+.welcome-screen {
+  display: flex;
+  min-height: 100dvh;
+  background:
+    radial-gradient(900px 420px at 8% -10%, rgb(226 161 34 / 32%), transparent 55%),
+    radial-gradient(720px 380px at 100% 0%, rgb(196 82 42 / 18%), transparent 48%),
+    linear-gradient(180deg, #fbf6ee 0%, #f4e7d6 100%);
+}
+
+.lift-card {
+  border: 1px solid var(--line);
+  background: var(--card);
+  box-shadow: 0 4px 20px rgba(30, 26, 21, 0.08);
+  transition: transform 180ms ease, box-shadow 180ms ease;
+}
+
+.lift-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 24px rgba(30, 26, 21, 0.12);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .lift-card:hover {
+    transform: none;
+  }
 }

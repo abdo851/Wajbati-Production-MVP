@@ -39,3 +39,19 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# local demo database and private driver documents
+/data/
+/data/store.json
+/data/store.json.tmp
+/data/private-docs
+
+# keep the documented env template
+!.env.example
+
+data/store.json
+data/private-docs/
+.env
+.env.local
+tsconfig.tsbuildinfo
+!data/private-docs/.gitkeep

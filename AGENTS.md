@@ -7,3 +7,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
 This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
 
 <!-- END:nextjs-agent-rules -->
+
+## Wajbati
+
+This repository is the Wajbati daily meals platform. Customer checkout, chef publishing, and the admin desk all go through `src/lib/db`. Local mode persists to `data/store.json`. Supabase mode uses `supabase/migrations` and `place_order` for stock. Do not decrement meal stock from a client component or from a second code path.
