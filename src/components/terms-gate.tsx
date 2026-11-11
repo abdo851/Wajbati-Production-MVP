@@ -14,8 +14,8 @@ export function TermsGate() {
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
-    if (localStorage.getItem(STORAGE_KEY) !== "true") setOpen(true);
-  }, []);
+    setOpen(window.localStorage.getItem(STORAGE_KEY) !== "true");
+  }, [pathname]);
 
   useEffect(() => {
     if (!open) return;
@@ -29,7 +29,7 @@ export function TermsGate() {
   if (!open || pathname === "/terms" || pathname === "/privacy") return null;
 
   function agree() {
-    localStorage.setItem(STORAGE_KEY, "true");
+    window.localStorage.setItem(STORAGE_KEY, "true");
     setOpen(false);
   }
 

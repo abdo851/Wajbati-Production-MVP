@@ -6,6 +6,34 @@ import { inputClass, primaryButtonClass } from "@/components/ui";
 import { SERVICE_CITIES } from "@/lib/constants";
 import type { Role } from "@/lib/types";
 
+function PhotoField({ label, name, ratio = "square" }: { label: string; name: string; ratio?: "square" | "video" }) {
+  const [src, setSrc] = useState<string | null>(null);
+  return (
+    <label className="block text-base">
+      <span className="mb-1.5 block font-medium">{label}</span>
+      {src ? (
+        <span className={`mb-2 block w-full overflow-hidden rounded-lg ${ratio === "video" ? "aspect-video" : "aspect-square max-w-40"}`}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={src} alt="" className="h-full w-full rounded-lg object-cover" />
+        </span>
+      ) : null}
+      <input
+        className={inputClass}
+        name={name}
+        type="file"
+        accept="image/*"
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          setSrc((current) => {
+            if (current) URL.revokeObjectURL(current);
+            return file ? URL.createObjectURL(file) : null;
+          });
+        }}
+      />
+    </label>
+  );
+}
+
 function readFile(file: File | undefined): Promise<string | null> {
   if (!file) return Promise.resolve(null);
   return new Promise((resolve, reject) => {
@@ -55,16 +83,10 @@ export function ProfileExtras({ role }: { role: Role }) {
     <form onSubmit={submit} className="mt-6 space-y-3 rounded-lg border border-line bg-card p-5 shadow-[0_4px_20px_rgba(30,26,21,0.08)]">
       <h2 className="font-display text-2xl">{t("profile.extras")}</h2>
       <p className="text-base text-muted">{t("profile.optional")}</p>
-      <label className="block text-base">
-        <span className="mb-1.5 block font-medium">{t("profile.avatar")}</span>
-        <input className={inputClass} name="avatarFile" type="file" accept="image/*" />
-      </label>
+      <PhotoField label={t("profile.avatar")} name="avatarFile" />
       {role === "chef" ? (
         <>
-          <label className="block text-base">
-            <span className="mb-1.5 block font-medium">{t("profile.kitchenPhoto")}</span>
-            <input className={inputClass} name="kitchenFile" type="file" accept="image/*" />
-          </label>
+          <PhotoField label={t("profile.kitchenPhoto")} name="kitchenFile" ratio="video" />
           <label className="block text-base">
             <span className="mb-1.5 block font-medium">{t("profile.bio")}</span>
             <textarea className={`${inputClass} min-h-24`} name="bio" maxLength={280} />
@@ -83,14 +105,8 @@ export function ProfileExtras({ role }: { role: Role }) {
       ) : null}
       {role === "driver" ? (
         <>
-          <label className="block text-base">
-            <span className="mb-1.5 block font-medium">{t("profile.vehiclePhoto")}</span>
-            <input className={inputClass} name="vehicleFile" type="file" accept="image/*" />
-          </label>
-          <label className="block text-base">
-            <span className="mb-1.5 block font-medium">{t("profile.license")}</span>
-            <input className={inputClass} name="licenseFile" type="file" accept="image/*" />
-          </label>
+          <PhotoField label={t("profile.vehiclePhoto")} name="vehicleFile" />
+          <PhotoField label={t("profile.license")} name="licenseFile" />
           <label className="block text-base">
             <span className="mb-1.5 block font-medium">{t("profile.notes")}</span>
             <textarea className={`${inputClass} min-h-24`} name="notes" maxLength={400} />

@@ -87,15 +87,18 @@ export function ReviewModal({
           <div className="mt-4">
             <p className="text-sm font-medium">{t("admin.signature")}</p>
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={view.signatureUrl} alt={t("admin.signature")} className="mt-2 h-32 max-w-full rounded-2xl border border-line bg-white object-contain p-2" />
+            <div className="mt-2 aspect-video w-full overflow-hidden rounded-lg border border-line bg-white">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={view.signatureUrl} alt={t("admin.signature")} className="h-full w-full rounded-lg object-contain" />
+            </div>
           </div>
         ) : null}
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
           {view.documents.length === 0 ? <p className="text-sm text-muted">{t("admin.documentsMissing")}</p> : null}
           {view.documents.map((document) => (
-            <a key={document.id} href={document.href} target="_blank" rel="noreferrer" className="block">
+            <a key={document.id} href={document.href} target="_blank" rel="noreferrer" className="block aspect-square w-full overflow-hidden rounded-lg">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={document.href} alt={document.kind} className="h-56 w-full rounded-2xl object-cover" />
+              <img src={document.href} alt={document.kind} className="h-full w-full rounded-lg object-cover" />
               <span className="mt-1 block text-xs text-muted">{document.kind.replaceAll("_", " ")}</span>
             </a>
           ))}

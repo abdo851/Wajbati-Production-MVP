@@ -93,10 +93,10 @@ function AvatarPicker({ initialSrc, onSaved }: { initialSrc: string | null; onSa
 
   return (
     <div className="mt-4">
-      <label className="inline-flex size-36 cursor-pointer items-center justify-center overflow-hidden rounded-full border border-line bg-card shadow-[0_4px_20px_rgba(30,26,21,0.08)]">
+      <label className="inline-flex aspect-square size-36 cursor-pointer items-center justify-center overflow-hidden rounded-full border border-line bg-card shadow-[0_4px_20px_rgba(30,26,21,0.08)]">
         {src ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={src} alt="" className="size-full object-cover" />
+          <img src={src} alt="" className="aspect-square h-full w-full rounded-lg object-cover" />
         ) : (
           <span className="text-sm text-muted">{t("profile.avatar")}</span>
         )}
@@ -256,8 +256,10 @@ function Kitchen({
             <span className="mb-1.5 block font-medium">{t("chef.photo")}</span>
             <span className="flex min-h-52 cursor-pointer flex-col items-center justify-center overflow-hidden rounded-3xl border border-dashed border-[#B85C3E]/50 bg-[#B85C3E]/10 px-4 py-6 text-center">
               {preview ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={preview} alt="" className="mb-3 max-h-48 w-full rounded-2xl object-cover" />
+                <span className="mb-3 block aspect-video w-full overflow-hidden rounded-lg">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={preview} alt="" className="h-full w-full rounded-lg object-cover" />
+                </span>
               ) : (
                 <span className="mb-2 inline-flex size-12 items-center justify-center rounded-2xl bg-[#B85C3E] text-[#FAF6EF]" aria-hidden="true">
                   <svg viewBox="0 0 24 24" className="size-6" fill="none" stroke="currentColor" strokeWidth="1.6">
@@ -335,8 +337,10 @@ function Kitchen({
               {(data?.meals ?? []).map((meal) => (
                 <li key={meal.id} className="rounded-3xl border border-line bg-card px-4 py-3">
                   {meal.photoUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={meal.photoUrl} alt="" className="mb-3 h-36 w-full rounded-2xl object-cover" />
+                    <span className="mb-3 block aspect-video w-full overflow-hidden rounded-lg">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={meal.photoUrl} alt="" className="h-full w-full rounded-lg object-cover" />
+                    </span>
                   ) : null}
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
@@ -424,11 +428,24 @@ function OrderList({ orders, onChanged }: { orders: ChefOrder[]; onChanged: () =
                   <p className="font-medium">
                     {order.quantity} × {order.mealTitle}
                   </p>
-                  <p className="mt-1 text-sm">
-                    {order.customerName} · {order.customerPhone}
-                  </p>
-                  <p className="text-sm text-muted">{order.deliveryAddress}</p>
-                  {order.customerNotes ? <p className="mt-1 text-sm">{order.customerNotes}</p> : null}
+                  <dl className="mt-2 space-y-1 text-sm">
+                    <div>
+                      <dt className="text-xs text-muted">{t("order.name")}</dt>
+                      <dd className="font-medium">{order.customerName}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs text-muted">{t("order.phone")}</dt>
+                      <dd>{order.customerPhone}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs text-muted">{t("order.address")}</dt>
+                      <dd>{order.deliveryAddress}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs text-muted">{t("order.notes")}</dt>
+                      <dd>{order.customerNotes || "—"}</dd>
+                    </div>
+                  </dl>
                   <p className="mt-1 text-sm text-muted">{t("pay.cash")}</p>
                   <p className="mt-1 text-xs text-muted">{formatWhen(order.createdAt)}</p>
                 </div>

@@ -262,11 +262,24 @@ function JobCard({ job, children }: { job: DeliveryJob; children?: ReactNode }) 
         </div>
         <StatusPill status={job.status} />
       </div>
-      <p className="mt-3 text-sm">
-        {job.customerName} · {job.customerPhone}
-      </p>
-      <p className="text-sm text-muted">{job.deliveryAddress}</p>
-      {job.customerNotes ? <p className="mt-2 text-sm">{job.customerNotes}</p> : null}
+      <dl className="mt-3 space-y-1 text-sm">
+        <div>
+          <dt className="text-xs text-muted">{t("order.name")}</dt>
+          <dd className="font-medium">{job.customerName}</dd>
+        </div>
+        <div>
+          <dt className="text-xs text-muted">{t("order.phone")}</dt>
+          <dd>{job.customerPhone}</dd>
+        </div>
+        <div>
+          <dt className="text-xs text-muted">{t("order.address")}</dt>
+          <dd>{job.deliveryAddress}</dd>
+        </div>
+        <div>
+          <dt className="text-xs text-muted">{t("order.notes")}</dt>
+          <dd>{job.customerNotes || "—"}</dd>
+        </div>
+      </dl>
       <p className="mt-2 text-sm">{t("pay.cash")}</p>
       <p className="mt-2 text-sm">
         {t("driver.feeLine", { fee: formatMad(job.deliveryFeeMad), commission: formatMad(job.driverCommissionMad), net: formatMad(job.driverNetMad) })}

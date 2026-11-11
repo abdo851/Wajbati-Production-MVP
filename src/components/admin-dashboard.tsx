@@ -167,8 +167,24 @@ function Desk({ name, onLogout }: { name: string; onLogout: () => Promise<void> 
                     <StatusPill status={order.status} />
                   </div>
                   <p className="mt-1">{order.kitchenName}</p>
-                  <p className="text-muted">{order.customerName}</p>
-                  <p className="text-xs text-muted">{order.deliveryAddress}</p>
+                  <dl className="mt-2 space-y-1">
+                    <div>
+                      <dt className="text-xs text-muted">{t("order.name")}</dt>
+                      <dd className="font-medium">{order.customerName}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs text-muted">{t("order.phone")}</dt>
+                      <dd>{order.customerPhone}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs text-muted">{t("order.address")}</dt>
+                      <dd>{order.deliveryAddress}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs text-muted">{t("order.notes")}</dt>
+                      <dd>{order.customerNotes || "—"}</dd>
+                    </div>
+                  </dl>
                   <p className="mt-2">
                     {formatMad(order.totalMad)}
                     <span className="text-muted"> · {t("admin.orderCommission", { amount: formatMad(order.commissionMad) })}</span>
@@ -196,8 +212,10 @@ function Desk({ name, onLogout }: { name: string; onLogout: () => Promise<void> 
                       <td className="px-4 py-3 whitespace-nowrap">{formatWhen(order.createdAt)}</td>
                       <td className="px-4 py-3">{order.kitchenName}</td>
                       <td className="px-4 py-3">
-                        <span className="block">{order.customerName}</span>
-                        <span className="text-xs text-muted">{order.deliveryAddress}</span>
+                        <span className="block font-medium">{order.customerName}</span>
+                        <span className="block text-xs">{order.customerPhone}</span>
+                        <span className="block text-xs text-muted">{order.deliveryAddress}</span>
+                        <span className="mt-1 block text-xs">{order.customerNotes || "—"}</span>
                       </td>
                       <td className="px-4 py-3">
                         {order.quantity} × {order.mealTitle}
@@ -294,9 +312,9 @@ function PendingChefs({ refreshKey, onToast }: { refreshKey: number; onToast: (m
     return (
       <li key={chef.id} className="flex flex-wrap items-center gap-3 rounded-2xl border border-line px-3 py-3">
         {chef.cinDocumentId ? (
-          <a href={`/api/admin/chef-documents/${chef.cinDocumentId}`} target="_blank" rel="noreferrer" className="block">
+          <a href={`/api/admin/chef-documents/${chef.cinDocumentId}`} target="_blank" rel="noreferrer" className="block aspect-square w-36 overflow-hidden rounded-lg">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={`/api/admin/chef-documents/${chef.cinDocumentId}`} alt="CIN" className="h-36 w-56 rounded-2xl object-cover" />
+            <img src={`/api/admin/chef-documents/${chef.cinDocumentId}`} alt="CIN" className="h-full w-full rounded-lg object-cover" />
           </a>
         ) : null}
         <div className="min-w-0 flex-1">
@@ -451,12 +469,12 @@ function DriverDesk({
             {driver.documents.length > 0 ? (
               <div className="mt-3 flex flex-wrap gap-2">
                 {driver.documents.map((document) => (
-                  <a key={document.id} href={`/api/admin/documents/${document.id}`} target="_blank" rel="noreferrer" className="block w-36">
+                  <a key={document.id} href={`/api/admin/documents/${document.id}`} target="_blank" rel="noreferrer" className="block aspect-square w-36 overflow-hidden rounded-lg">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src={`/api/admin/documents/${document.id}`}
                       alt={document.kind}
-                      className="h-24 w-36 rounded-2xl object-cover shadow-[0_12px_20px_-16px_rgba(90,48,20,0.9)]"
+                      className="h-full w-full rounded-lg object-cover"
                     />
                     <span className="mt-1 block text-xs capitalize text-muted">{document.kind.replaceAll("_", " ")}</span>
                   </a>
@@ -632,8 +650,24 @@ function ActiveTrips({ deliveries }: { deliveries: ActiveDelivery[] }) {
                 <p className="text-muted">
                   {trip.driverName} · {trip.city}
                 </p>
-                <p>{trip.customerName}</p>
-                <p className="text-xs text-muted">{trip.deliveryAddress}</p>
+                <dl className="mt-2 space-y-1">
+                  <div>
+                    <dt className="text-xs text-muted">{t("order.name")}</dt>
+                    <dd>{trip.customerName}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-muted">{t("order.phone")}</dt>
+                    <dd>{trip.customerPhone}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-muted">{t("order.address")}</dt>
+                    <dd>{trip.deliveryAddress}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-muted">{t("order.notes")}</dt>
+                    <dd>{trip.customerNotes || "—"}</dd>
+                  </div>
+                </dl>
               </div>
               <StatusPill status={trip.status} />
             </div>

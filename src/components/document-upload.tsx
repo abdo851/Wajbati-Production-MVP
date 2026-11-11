@@ -19,6 +19,7 @@ export function DocumentUpload({ vehicle, onDone }: { vehicle: Vehicle; onDone: 
   const { t } = useI18n();
   const kinds = requiredDocumentKinds(vehicle);
   const [files, setFiles] = useState<Partial<Record<DocumentKind, File>>>({});
+  const [previews, setPreviews] = useState<Partial<Record<DocumentKind, string>>>({});
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const ready = kinds.every((kind) => files[kind]);
@@ -68,8 +69,19 @@ export function DocumentUpload({ vehicle, onDone }: { vehicle: Vehicle; onDone: 
               }
               setError(null);
               setFiles((current) => ({ ...current, [kind]: file }));
+              setPreviews((current) => {
+                const previous = current[kind];
+                if (previous) URL.revokeObjectURL(previous);
+                return { ...current, [kind]: file ? URL.createObjectURL(file) : undefined };
+              });
             }}
           />
+          {previews[kind] ? (
+            <span className="mt-2 block aspect-square w-full max-w-40 overflow-hidden rounded-lg">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={previews[kind]} alt="" className="h-full w-full rounded-lg object-cover" />
+            </span>
+          ) : null}
         </label>
       ))}
       {error ? (

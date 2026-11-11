@@ -50,7 +50,14 @@ export function MealBoard() {
       ) : null}
       <div className="mt-6 grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
         {meals.map((meal) => (
-          <MealCard key={meal.id} meal={meal} onOrder={setSelected} />
+          <MealCard
+            key={meal.id}
+            meal={meal}
+            onOrder={(next) => {
+              if (window.localStorage.getItem("wajbati_terms_accepted") !== "true") return;
+              setSelected(next);
+            }}
+          />
         ))}
       </div>
       {currentMeal ? (
@@ -73,8 +80,10 @@ function MealCard({ meal, onOrder }: { meal: PublicMeal; onOrder: (meal: PublicM
   return (
     <article className="lift-card flex flex-col overflow-hidden rounded-3xl">
       {meal.photoUrl ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={meal.photoUrl} alt="" className="h-52 w-full object-cover" />
+        <div className="aspect-video w-full overflow-hidden">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={meal.photoUrl} alt="" className="h-full w-full rounded-lg object-cover" />
+        </div>
       ) : null}
       <div className="flex flex-1 flex-col p-5">
       <div className="flex items-start justify-between gap-3">
@@ -209,17 +218,17 @@ function OrderDialog({
 
   return (
     <div
-      className="fixed inset-0 z-30 flex items-end justify-center bg-foreground/45 p-3 sm:items-center sm:p-4"
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-[#1E1A15]/45 p-3 backdrop-blur-md sm:p-6"
       onClick={onClose}
     >
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby="order-title"
-        className="lift-card max-h-[min(92dvh,44rem)] w-full max-w-lg overflow-y-auto rounded-3xl p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))]"
+        className="flex max-h-[min(92dvh,44rem)] w-full max-w-lg flex-col overflow-hidden rounded-3xl border border-line bg-card shadow-[0_12px_40px_rgba(30,26,21,0.18)]"
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="flex items-start justify-between gap-3">
+        <div className="flex items-start justify-between gap-3 px-5 pt-5">
           <div className="min-w-0">
             <p className="text-sm text-terracotta">{meal.kitchenName}</p>
             <p className="text-sm text-olive">{t("chef.rating")}</p>
@@ -231,13 +240,16 @@ function OrderDialog({
             {t("order.close")}
           </button>
         </div>
-        {meal.photoUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={meal.photoUrl} alt="" className="mt-4 h-56 w-full rounded-3xl object-cover" />
-        ) : null}
-        <p className="mt-3 text-base leading-7 text-muted">{meal.description}</p>
         {receipt ? (
-          <div className="mt-5 space-y-4 rounded-2xl bg-background p-4 text-base leading-7">
+          <div className="mt-4 space-y-4 overflow-y-auto px-5 pb-5 text-base leading-7">
+            {meal.photoUrl ? (
+              <div className="aspect-video w-full overflow-hidden rounded-lg">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={meal.photoUrl} alt="" className="h-full w-full rounded-lg object-cover" />
+              </div>
+            ) : null}
+            <p className="text-base leading-7 text-muted">{meal.description}</p>
+            <div className="space-y-4 rounded-2xl bg-background p-4">
             <p className="font-medium text-olive">{t("order.placed")}</p>
             <p>{t("order.for", { quantity: receipt.quantity, meal: receipt.mealTitle, name: receipt.customerName })}</p>
             <p>{t("order.deliverTo", { address: receipt.deliveryAddress })}</p>
@@ -278,9 +290,18 @@ function OrderDialog({
                 </div>
               </form>
             ) : null}
+            </div>
           </div>
         ) : (
-          <form onSubmit={submit} className="mt-5 space-y-3">
+          <form onSubmit={submit} className="mt-4 flex min-h-0 flex-1 flex-col">
+            <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-5 pb-4">
+            {meal.photoUrl ? (
+              <div className="aspect-video w-full overflow-hidden rounded-lg">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={meal.photoUrl} alt="" className="h-full w-full rounded-lg object-cover" />
+              </div>
+            ) : null}
+            <p className="text-base leading-7 text-muted">{meal.description}</p>
             <p className="text-base text-muted">
               {t("order.left", { count: remaining, price: formatMad(meal.priceMad, lang) })}
             </p>
@@ -350,9 +371,12 @@ function OrderDialog({
                 {t("footer.privacy")}
               </Link>
             </p>
-            <button className={`${primaryButtonClass} w-full`} type="submit" disabled={pending || remaining < 1}>
-              {remaining < 1 ? t("board.soldOut") : pending ? t("order.placing") : t("order.place")}
-            </button>
+            </div>
+            <div className="sticky bottom-0 border-t border-line bg-card/95 px-5 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-md">
+              <button className={`${primaryButtonClass} w-full`} type="submit" disabled={pending || remaining < 1}>
+                {remaining < 1 ? t("board.soldOut") : pending ? t("order.placing") : t("order.place")}
+              </button>
+            </div>
           </form>
         )}
       </div>
