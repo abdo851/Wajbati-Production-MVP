@@ -491,6 +491,17 @@ const en = {
   "admin.tabUsers": "All users",
   "admin.userRole": "Role",
   "admin.userStatus": "Status",
+  "header.profile": "Profile",
+  "profile.edit": "Edit profile",
+  "admin.range.today": "Today",
+  "admin.range.yesterday": "Yesterday",
+  "admin.range.week": "This week",
+  "admin.range.month": "This month",
+  "admin.range.all": "All",
+  "admin.tabHistory": "History",
+  "admin.deleteAsk": "Are you sure you want to delete this person? This cannot be undone.",
+  "admin.roleChef": "Chef",
+  "admin.roleDriver": "Driver",
 } as const;
 
 export type MessageKey = keyof typeof en;
@@ -986,6 +997,17 @@ const ar: Record<MessageKey, string> = {
   "admin.tabUsers": "جميع المستخدمين",
   "admin.userRole": "الدور",
   "admin.userStatus": "الحالة",
+  "header.profile": "الملف",
+  "profile.edit": "تعديل الملف",
+  "admin.range.today": "اليوم",
+  "admin.range.yesterday": "الأمس",
+  "admin.range.week": "هذا الأسبوع",
+  "admin.range.month": "هذا الشهر",
+  "admin.range.all": "الكل",
+  "admin.tabHistory": "السجل",
+  "admin.deleteAsk": "هل أنت متأكد من حذف هذا الشخص؟ لا يمكن التراجع عن هذا الإجراء",
+  "admin.roleChef": "طاهٍ",
+  "admin.roleDriver": "سائق",
 };
 
 const fr: Record<MessageKey, string> = {
@@ -1479,6 +1501,17 @@ const fr: Record<MessageKey, string> = {
   "admin.tabUsers": "Tous les utilisateurs",
   "admin.userRole": "Rôle",
   "admin.userStatus": "Statut",
+  "header.profile": "Profil",
+  "profile.edit": "Modifier le profil",
+  "admin.range.today": "Aujourd'hui",
+  "admin.range.yesterday": "Hier",
+  "admin.range.week": "Cette semaine",
+  "admin.range.month": "Ce mois",
+  "admin.range.all": "Tout",
+  "admin.tabHistory": "Historique",
+  "admin.deleteAsk": "Voulez-vous vraiment supprimer cette personne ? Cette action est irréversible.",
+  "admin.roleChef": "Chef",
+  "admin.roleDriver": "Livreur",
 };
 
 export const messages: Record<Lang, Record<MessageKey, string>> = { en, ar, fr };

@@ -17,6 +17,23 @@ function Mark() {
   );
 }
 
+export function ProfilePhoto({ src, label, className = "size-11" }: { src?: string | null; label: string; className?: string }) {
+  return (
+    <span className={`inline-flex aspect-square shrink-0 items-center justify-center overflow-hidden rounded-full border border-line bg-[#F3EBE1] text-foreground shadow-[0_4px_20px_rgba(30,26,21,0.08)] ${className}`}>
+      {src ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={src} alt="" className="h-full w-full object-cover" />
+      ) : (
+        <svg viewBox="0 0 24 24" className="size-1/2" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
+          <circle cx="12" cy="8" r="3.2" />
+          <path d="M5 19.2c1.4-3 3.8-4.5 7-4.5s5.6 1.5 7 4.5" strokeLinecap="round" />
+        </svg>
+      )}
+      <span className="sr-only">{label}</span>
+    </span>
+  );
+}
+
 function MenuButton({ open, onClick }: { open: boolean; onClick: () => void }) {
   const { t } = useI18n();
   return (
@@ -37,10 +54,12 @@ function MenuButton({ open, onClick }: { open: boolean; onClick: () => void }) {
 }
 
 export function SiteHeader() {
-  const { lang } = useI18n();
+  const { lang, t } = useI18n();
   const { session } = useSession();
   const [open, setOpen] = useState(false);
-  const name = session?.user?.fullName;
+  const user = session?.user ?? null;
+  const name = user?.fullName;
+  const deskHref = user?.role === "chef" ? "/chef" : user?.role === "driver" ? "/driver" : null;
 
   return (
     <>
@@ -52,8 +71,13 @@ export function SiteHeader() {
             <span className="truncate font-display text-2xl leading-none">{lang === "ar" ? "وجبتي" : "Wajbati"}</span>
           </Link>
           <div className="ms-auto flex items-center gap-2">
+            {deskHref ? (
+              <Link href={deskHref} aria-label={t("header.profile")} className="inline-flex rounded-full">
+                <ProfilePhoto src={user?.avatarDataUrl} label={t("header.profile")} />
+              </Link>
+            ) : null}
             <LanguageMenu />
-            {name ? (
+            {name && !deskHref ? (
               <Link href="/account" className="hidden rounded-lg px-3 py-2 text-sm font-medium text-foreground md:inline">
                 {name}
               </Link>

@@ -5,6 +5,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { DocumentUpload } from "@/components/document-upload";
 import { ProfileExtras } from "@/components/profile-extras";
 import { DriverAuth } from "@/components/driver-auth";
+import { ProfilePhoto } from "@/components/site-header";
 import { WalletPanel } from "@/components/wallet-panel";
 import { useI18n } from "@/components/language";
 import { LiveDot, inputClass, primaryButtonClass, quietButtonClass, StatusPill } from "@/components/ui";
@@ -56,13 +57,31 @@ export function DriverDashboard() {
     <Route
       name={session.user.fullName}
       city={session.user.city ?? ""}
+      bio={session.user.bio ?? ""}
+      avatar={session.user.avatarDataUrl ?? null}
       onLogout={reload}
+      onProfileSaved={reload}
     />
   );
 }
 
-function Route({ name, city, onLogout }: { name: string; city: string; onLogout: () => Promise<void> }) {
+function Route({
+  name,
+  city,
+  bio,
+  avatar,
+  onLogout,
+  onProfileSaved,
+}: {
+  name: string;
+  city: string;
+  bio: string;
+  avatar: string | null;
+  onLogout: () => Promise<void>;
+  onProfileSaved: () => Promise<void>;
+}) {
   const { t } = useI18n();
+  const [editingProfile, setEditingProfile] = useState(false);
   const { data, error, reload } = useLiveQuery<DriverBoard>("/api/driver/board");
   const [busy, setBusy] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -105,7 +124,22 @@ function Route({ name, city, onLogout }: { name: string; city: string; onLogout:
         </div>
       </div>
 
-      <ProfileExtras role="driver" />
+      <section className="mt-6 rounded-3xl border border-line bg-card p-5 shadow-[0_8px_30px_rgba(30,26,21,0.08)]">
+        <div className="flex flex-wrap items-center gap-5">
+          <ProfilePhoto src={avatar} label={name} className="size-32" />
+          <div className="min-w-0 flex-1">
+            <h2 className="font-display text-4xl leading-tight">{name}</h2>
+            <button type="button" className={`${quietButtonClass} mt-4`} onClick={() => setEditingProfile((open) => !open)}>
+              {t("profile.edit")}
+            </button>
+          </div>
+        </div>
+        <p className="mt-6 text-sm font-medium text-muted">{t("profile.bio")}</p>
+        <p className="mt-1 text-base leading-7">{bio || "—"}</p>
+        <p className="mt-3 text-sm font-medium text-muted">{t("chef.city")}</p>
+        <p className="mt-1 text-base text-terracotta">{city || "—"}</p>
+        {editingProfile ? <ProfileExtras role="driver" onSaved={onProfileSaved} /> : null}
+      </section>
       <WalletPanel />
       {data ? <Earnings board={data} /> : null}
       {error ? <p className="mt-4 text-sm text-terracotta-deep">{error}</p> : null}

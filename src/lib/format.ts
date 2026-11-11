@@ -21,6 +21,25 @@ export function weekStartInCasablanca(date = new Date()): string {
   return start.toISOString().slice(0, 10);
 }
 
+export type DateRange = "today" | "yesterday" | "week" | "month" | "all";
+
+export function matchesCasablancaRange(iso: string, range: DateRange, now = new Date()): boolean {
+  if (range === "all") return true;
+  const stamp = Date.parse(iso);
+  if (!Number.isFinite(stamp)) return false;
+  const day = todayInCasablanca(new Date(stamp));
+  const today = todayInCasablanca(now);
+  if (range === "today") return day === today;
+  if (range === "yesterday") {
+    const [year, month, date] = today.split("-").map(Number);
+    const previous = new Date(Date.UTC(year, month - 1, date));
+    previous.setUTCDate(previous.getUTCDate() - 1);
+    return day === previous.toISOString().slice(0, 10);
+  }
+  if (range === "week") return day >= weekStartInCasablanca(now) && day <= today;
+  return day.slice(0, 7) === today.slice(0, 7);
+}
+
 type UiLang = "ar" | "en" | "fr";
 
 let activeLang: UiLang = "ar";

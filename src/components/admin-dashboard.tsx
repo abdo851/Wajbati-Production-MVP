@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { AdminChat } from "@/components/chat-panel";
 import { LoginCard } from "@/components/login-card";
 import { ReviewModal, type ReviewView } from "@/components/review-modal";
@@ -8,10 +8,14 @@ import { useI18n } from "@/components/language";
 import { LiveDot, primaryButtonClass, quietButtonClass, StatusPill } from "@/components/ui";
 import { useLiveQuery } from "@/components/use-live-query";
 import { useSession } from "@/components/use-session";
-import { formatMad, formatServiceDate, formatWhen } from "@/lib/format";
+import { formatMad, formatServiceDate, formatWhen, matchesCasablancaRange, type DateRange } from "@/lib/format";
 import { readJson } from "@/lib/read-json";
 import { isSuperAdmin } from "@/lib/super-admin";
 import type { ActiveDelivery, AdminOverview, Chef, DriverRecord, FinanceSummary, StaffAccount } from "@/lib/types";
+
+const tinyButton = "inline-flex items-center justify-center rounded-lg border border-line bg-white px-2 py-1 text-xs font-medium";
+const tinyPrimary = "inline-flex items-center justify-center rounded-lg bg-saffron px-2 py-1 text-xs font-medium";
+const cell = "px-2 py-1 text-xs";
 
 export function AdminDashboard() {
   const { t } = useI18n();
@@ -25,13 +29,15 @@ export function AdminDashboard() {
 function Desk({ name, onLogout }: { name: string; onLogout: () => Promise<void> }) {
   const { t } = useI18n();
   const { data, error, loading, reload } = useLiveQuery<AdminOverview>("/api/admin/overview");
-  const [tab, setTab] = useState<"orders" | "chefs" | "drivers" | "emails" | "messages" | "users">("orders");
+  const [tab, setTab] = useState<"orders" | "chefs" | "drivers" | "history" | "emails" | "messages" | "users">("orders");
+  const [range, setRange] = useState<DateRange>("all");
   const [toast, setToast] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const tabs = [
     ["orders", t("admin.tabOrders")],
     ["chefs", t("admin.tabChefs")],
     ["drivers", t("admin.tabDrivers")],
+    ["history", t("admin.tabHistory")],
     ["users", t("admin.tabUsers")],
     ["emails", t("admin.tabEmails")],
     ["messages", t("admin.tabMessages")],
@@ -76,6 +82,7 @@ function Desk({ name, onLogout }: { name: string; onLogout: () => Promise<void> 
           </button>
         ))}
       </div>
+      {tab === "orders" || tab === "chefs" || tab === "drivers" || tab === "history" ? <RangeBar value={range} onChange={setRange} /> : null}
 
       {loading && !data && tab !== "emails" && tab !== "chefs" ? <p className="mt-8 text-sm text-muted">{t("admin.loading")}</p> : null}
 
@@ -128,26 +135,26 @@ function Desk({ name, onLogout }: { name: string; onLogout: () => Promise<void> 
               <table className="w-full min-w-[40rem] text-start text-sm">
                 <thead className="text-muted">
                   <tr className="border-b border-line">
-                    <th className="px-4 py-3 font-medium">{t("admin.kitchen")}</th>
-                    <th className="px-4 py-3 font-medium">{t("admin.orders")}</th>
-                    <th className="px-4 py-3 font-medium">{t("admin.portions")}</th>
-                    <th className="px-4 py-3 font-medium">{t("admin.revenue")}</th>
-                    <th className="px-4 py-3 font-medium">{t("admin.commission")}</th>
-                    <th className="px-4 py-3 font-medium">{t("admin.chefKeeps")}</th>
+                    <th className="px-2 py-1 text-xs font-medium">{t("admin.kitchen")}</th>
+                    <th className="px-2 py-1 text-xs font-medium">{t("admin.orders")}</th>
+                    <th className="px-2 py-1 text-xs font-medium">{t("admin.portions")}</th>
+                    <th className="px-2 py-1 text-xs font-medium">{t("admin.revenue")}</th>
+                    <th className="px-2 py-1 text-xs font-medium">{t("admin.commission")}</th>
+                    <th className="px-2 py-1 text-xs font-medium">{t("admin.chefKeeps")}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {data.kitchens.map((kitchen) => (
                     <tr key={kitchen.chefId} className="border-b border-line last:border-0">
-                      <td className="px-4 py-3">
+                      <td className="px-2 py-1 text-xs">
                         <span className="block font-medium">{kitchen.kitchenName}</span>
                         <span className="text-xs text-muted">{kitchen.city}</span>
                       </td>
-                      <td className="px-4 py-3">{kitchen.orders}</td>
-                      <td className="px-4 py-3">{kitchen.portions}</td>
-                      <td className="px-4 py-3">{formatMad(kitchen.revenueMad)}</td>
-                      <td className="px-4 py-3">{formatMad(kitchen.commissionMad)}</td>
-                      <td className="px-4 py-3">{formatMad(kitchen.payoutMad)}</td>
+                      <td className="px-2 py-1 text-xs">{kitchen.orders}</td>
+                      <td className="px-2 py-1 text-xs">{kitchen.portions}</td>
+                      <td className="px-2 py-1 text-xs">{formatMad(kitchen.revenueMad)}</td>
+                      <td className="px-2 py-1 text-xs">{formatMad(kitchen.commissionMad)}</td>
+                      <td className="px-2 py-1 text-xs">{formatMad(kitchen.payoutMad)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -158,7 +165,7 @@ function Desk({ name, onLogout }: { name: string; onLogout: () => Promise<void> 
           <section className="mt-8">
             <h2 className="font-display text-2xl">{t("admin.recent")}</h2>
             <ul className="mt-3 space-y-3 sm:hidden">
-              {data.recentOrders.map((order) => (
+              {data.recentOrders.filter((order) => matchesCasablancaRange(order.createdAt, range)).map((order) => (
                 <li key={order.id} className="rounded-3xl border border-line bg-card p-4 text-sm">
                   <div className="flex items-start justify-between gap-3">
                     <p className="font-medium">
@@ -197,32 +204,32 @@ function Desk({ name, onLogout }: { name: string; onLogout: () => Promise<void> 
               <table className="w-full min-w-[48rem] text-start text-sm">
                 <thead className="text-muted">
                   <tr className="border-b border-line">
-                    <th className="px-4 py-3 font-medium">{t("admin.when")}</th>
-                    <th className="px-4 py-3 font-medium">{t("admin.kitchen")}</th>
-                    <th className="px-4 py-3 font-medium">{t("admin.customer")}</th>
-                    <th className="px-4 py-3 font-medium">{t("admin.meal")}</th>
-                    <th className="px-4 py-3 font-medium">{t("admin.total")}</th>
-                    <th className="px-4 py-3 font-medium">{t("admin.commission")}</th>
-                    <th className="px-4 py-3 font-medium">{t("admin.status")}</th>
+                    <th className="px-2 py-1 text-xs font-medium">{t("admin.when")}</th>
+                    <th className="px-2 py-1 text-xs font-medium">{t("admin.kitchen")}</th>
+                    <th className="px-2 py-1 text-xs font-medium">{t("admin.customer")}</th>
+                    <th className="px-2 py-1 text-xs font-medium">{t("admin.meal")}</th>
+                    <th className="px-2 py-1 text-xs font-medium">{t("admin.total")}</th>
+                    <th className="px-2 py-1 text-xs font-medium">{t("admin.commission")}</th>
+                    <th className="px-2 py-1 text-xs font-medium">{t("admin.status")}</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {data.recentOrders.map((order) => (
+                  {data.recentOrders.filter((order) => matchesCasablancaRange(order.createdAt, range)).map((order) => (
                     <tr key={order.id} className="border-b border-line last:border-0">
-                      <td className="px-4 py-3 whitespace-nowrap">{formatWhen(order.createdAt)}</td>
-                      <td className="px-4 py-3">{order.kitchenName}</td>
-                      <td className="px-4 py-3">
+                      <td className="px-2 py-1 text-xs whitespace-nowrap">{formatWhen(order.createdAt)}</td>
+                      <td className="px-2 py-1 text-xs">{order.kitchenName}</td>
+                      <td className="px-2 py-1 text-xs">
                         <span className="block font-medium">{order.customerName}</span>
                         <span className="block text-xs">{order.customerPhone}</span>
                         <span className="block text-xs text-muted">{order.deliveryAddress}</span>
                         <span className="mt-1 block text-xs">{order.customerNotes || "—"}</span>
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-2 py-1 text-xs">
                         {order.quantity} × {order.mealTitle}
                       </td>
-                      <td className="px-4 py-3">{formatMad(order.totalMad)}</td>
-                      <td className="px-4 py-3">{formatMad(order.commissionMad)}</td>
-                      <td className="px-4 py-3">
+                      <td className="px-2 py-1 text-xs">{formatMad(order.totalMad)}</td>
+                      <td className="px-2 py-1 text-xs">{formatMad(order.commissionMad)}</td>
+                      <td className="px-2 py-1 text-xs">
                         <StatusPill status={order.status} />
                       </td>
                     </tr>
@@ -232,11 +239,12 @@ function Desk({ name, onLogout }: { name: string; onLogout: () => Promise<void> 
             </div>
           </section>
 
-          <ActiveTrips deliveries={data.activeDeliveries} />
+          <ActiveTrips deliveries={data.activeDeliveries.filter((trip) => matchesCasablancaRange(trip.createdAt, range))} />
         </>
       ) : null}
-      {tab === "chefs" ? <div className="mt-8"><PendingChefs refreshKey={refreshKey} onToast={setToast} /></div> : null}
-      {tab === "drivers" && data ? <DriverDesk drivers={data.drivers} onChanged={() => void reload()} onToast={setToast} /> : null}
+      {tab === "chefs" ? <div className="mt-8"><PendingChefs refreshKey={refreshKey} range={range} onToast={setToast} /></div> : null}
+      {tab === "drivers" && data ? <DriverDesk drivers={data.drivers} range={range} onChanged={() => void reload()} onToast={setToast} /> : null}
+      {tab === "history" && data ? <HistoryDesk refreshKey={refreshKey} drivers={data.drivers} range={range} onChanged={() => void reload()} onToast={setToast} /> : null}
       {tab === "users" ? <AllUsers /> : null}
       {tab === "emails" ? <EmailCaptures /> : null}
       {tab === "messages" ? <AdminChat /> : null}
@@ -254,12 +262,13 @@ function Desk({ name, onLogout }: { name: string; onLogout: () => Promise<void> 
   );
 }
 
-function PendingChefs({ refreshKey, onToast }: { refreshKey: number; onToast: (message: string) => void }) {
+function PendingChefs({ refreshKey, range, onToast }: { refreshKey: number; range: DateRange; onToast: (message: string) => void }) {
   const { t } = useI18n();
   const [chefs, setChefs] = useState<Chef[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState<Chef | null>(null);
   const [busy, setBusy] = useState(false);
+  const [removeId, setRemoveId] = useState<string | null>(null);
 
   async function load() {
     const response = await fetch("/api/admin/chefs", { cache: "no-store" });
@@ -305,32 +314,45 @@ function PendingChefs({ refreshKey, onToast }: { refreshKey: number; onToast: (m
     }
   }
 
-  const pending = chefs.filter((chef) => chef.approval_status === "pending");
-  const decided = chefs.filter((chef) => chef.approval_status === "approved" || chef.approval_status === "rejected");
+  async function remove(chefId: string) {
+    setBusy(true);
+    setError(null);
+    try {
+      const response = await fetch("/api/admin/chefs", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chefId }),
+      });
+      await readJson(response);
+      setChefs((current) => current.filter((chef) => chef.id !== chefId));
+      setRemoveId(null);
+      if (open?.id === chefId) setOpen(null);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : t("admin.updateFailed"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const pending = chefs.filter((chef) => chef.approval_status === "pending" && matchesCasablancaRange(chef.createdAt, range));
+  const decided = chefs.filter((chef) => (chef.approval_status === "approved" || chef.approval_status === "rejected") && matchesCasablancaRange(chef.createdAt, range));
 
   function renderChef(chef: Chef) {
     return (
-      <li key={chef.id} className="flex flex-wrap items-center gap-3 rounded-2xl border border-line px-3 py-3">
-        {chef.cinDocumentId ? (
-          <a href={`/api/admin/chef-documents/${chef.cinDocumentId}`} target="_blank" rel="noreferrer" className="block aspect-square w-36 overflow-hidden rounded-lg">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={`/api/admin/chef-documents/${chef.cinDocumentId}`} alt="CIN" className="h-full w-full rounded-lg object-cover" />
-          </a>
-        ) : null}
-        <div className="min-w-0 flex-1">
-          <p className="font-medium">{chef.fullName}</p>
-          <p className="text-sm text-muted">{chef.city} · {chef.approval_status}</p>
-        </div>
-        <button type="button" className={quietButtonClass} onClick={() => setOpen(chef)} aria-label={t("admin.review")}>
-          <PenIcon /> {t("admin.review")}
-        </button>
-        <button type="button" className={quietButtonClass} onClick={() => void review(chef.id, "approved")}>
-          {t("admin.approve")}
-        </button>
-        <button type="button" className={quietButtonClass} onClick={() => void review(chef.id, "rejected")}>
-          {t("admin.reject")}
-        </button>
-      </li>
+      <tr key={chef.id} className="border-b border-line last:border-0">
+        <td className={cell}>
+          <span className="block font-medium">{chef.fullName}</span>
+          <span className="text-muted">{chef.city}</span>
+        </td>
+        <td className={cell}>{chef.approval_status}</td>
+        <td className={cell}>{formatWhen(chef.createdAt)}</td>
+        <td className={`${cell} whitespace-nowrap`}>
+          <button type="button" className={tinyButton} onClick={() => setOpen(chef)}>{t("admin.review")}</button>
+          <button type="button" className={`${tinyPrimary} ms-1`} onClick={() => void review(chef.id, "approved")}>{t("admin.approve")}</button>
+          <button type="button" className={`${tinyButton} ms-1`} onClick={() => void review(chef.id, "rejected")}>{t("admin.reject")}</button>
+          <button type="button" className={`${tinyButton} ms-1`} onClick={() => setRemoveId(chef.id)}>{t("chef.delete")}</button>
+        </td>
+      </tr>
     );
   }
 
@@ -339,13 +361,11 @@ function PendingChefs({ refreshKey, onToast }: { refreshKey: number; onToast: (m
       {error ? <p className="text-sm text-terracotta-deep">{error}</p> : null}
       <section className="rounded-3xl border border-line bg-card p-5">
         <h2 className="font-display text-2xl">{t("admin.pendingSection")}</h2>
-        {pending.length === 0 ? <p className="mt-3 text-sm text-muted">{t("admin.noChefs")}</p> : null}
-        <ul className="mt-4 space-y-3">{pending.map(renderChef)}</ul>
+        {pending.length === 0 ? <p className="mt-3 text-sm text-muted">{t("admin.noChefs")}</p> : <PeopleTable rows={pending.map(renderChef)} />}
       </section>
       <section className="rounded-3xl border border-line bg-card p-5">
         <h2 className="font-display text-2xl">{t("admin.decidedSection")}</h2>
-        {decided.length === 0 ? <p className="mt-3 text-sm text-muted">{t("admin.noChefs")}</p> : null}
-        <ul className="mt-4 space-y-3">{decided.map(renderChef)}</ul>
+        {decided.length === 0 ? <p className="mt-3 text-sm text-muted">{t("admin.noChefs")}</p> : <PeopleTable rows={decided.map(renderChef)} />}
       </section>
       {open ? (
         <ReviewModal
@@ -358,6 +378,7 @@ function PendingChefs({ refreshKey, onToast }: { refreshKey: number; onToast: (m
           onBalance={(balanceMad) => setOpen({ ...open, balanceMad })}
         />
       ) : null}
+      {removeId ? <DeleteDialog busy={busy} onCancel={() => setRemoveId(null)} onConfirm={() => void remove(removeId)} /> : null}
     </div>
   );
 }
@@ -377,15 +398,6 @@ function chefView(chef: Chef): ReviewView {
     })),
     signatureUrl: chef.signature_data_url,
   };
-}
-
-function PenIcon() {
-  return (
-    <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
-      <path d="M4 20h4l10-10-4-4L4 16v4z" />
-      <path d="M13 7l4 4" />
-    </svg>
-  );
 }
 
 function Books({ label, books }: { label: string; books: FinanceSummary }) {
@@ -416,10 +428,12 @@ function Stat({ label, value, detail }: { label: string; value: string; detail: 
 
 function DriverDesk({
   drivers,
+  range,
   onChanged,
   onToast,
 }: {
   drivers: DriverRecord[];
+  range: DateRange;
   onChanged: () => void;
   onToast: (message: string) => void;
 }) {
@@ -427,6 +441,7 @@ function DriverDesk({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [open, setOpen] = useState<DriverRecord | null>(null);
+  const [removeId, setRemoveId] = useState<string | null>(null);
 
   async function review(driverId: string, status: "approved" | "rejected" | "postponed") {
     setBusy(driverId);
@@ -448,55 +463,49 @@ function DriverDesk({
     }
   }
 
-  const pending = drivers.filter((driver) => driver.status === "pending");
-  const decided = drivers.filter((driver) => driver.status === "approved" || driver.status === "rejected");
+  async function remove(driverId: string) {
+    setBusy(driverId);
+    setError(null);
+    try {
+      const response = await fetch("/api/admin/drivers", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ driverId }),
+      });
+      await readJson(response);
+      setRemoveId(null);
+      if (open?.id === driverId) setOpen(null);
+      onChanged();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : t("admin.updateFailed"));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  const pending = drivers.filter((driver) => driver.status === "pending" && matchesCasablancaRange(driver.createdAt, range));
+  const decided = drivers.filter((driver) => (driver.status === "approved" || driver.status === "rejected") && matchesCasablancaRange(driver.createdAt, range));
 
   function renderDriver(driver: DriverRecord) {
     return (
-          <li key={driver.id} className="rounded-3xl border border-line bg-card p-4 text-sm">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <p className="font-medium">{driver.fullName}</p>
-                <p className="text-muted">
-                  {driver.phone} · {driver.city} · {driver.vehicle}
-                </p>
-              </div>
-              <span className="rounded-full bg-background px-2.5 py-1 text-xs font-medium capitalize">{driver.status}</span>
-            </div>
-            <p className="mt-2 text-xs text-muted">
-              {t("admin.documents")} · {driver.documentsReady ? t("admin.documentsReady") : t("admin.documentsMissing")}
-            </p>
-            {driver.documents.length > 0 ? (
-              <div className="mt-3 flex flex-wrap gap-2">
-                {driver.documents.map((document) => (
-                  <a key={document.id} href={`/api/admin/documents/${document.id}`} target="_blank" rel="noreferrer" className="block aspect-square w-36 overflow-hidden rounded-lg">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={`/api/admin/documents/${document.id}`}
-                      alt={document.kind}
-                      className="h-full w-full rounded-lg object-cover"
-                    />
-                    <span className="mt-1 block text-xs capitalize text-muted">{document.kind.replaceAll("_", " ")}</span>
-                  </a>
-                ))}
-              </div>
-            ) : null}
-            <div className="mt-3 flex flex-wrap gap-2">
-              <button type="button" className={quietButtonClass} onClick={() => setOpen(driver)} aria-label={t("admin.review")}>
-                <PenIcon /> {t("admin.review")}
-              </button>
-              {driver.status !== "approved" ? (
-                <button type="button" className={primaryButtonClass} disabled={busy === driver.id} onClick={() => void review(driver.id, "approved")}>
-                  {t("admin.approve")}
-                </button>
-              ) : null}
-              {driver.status !== "rejected" ? (
-                <button type="button" className={quietButtonClass} disabled={busy === driver.id} onClick={() => void review(driver.id, "rejected")}>
-                  {t("admin.reject")}
-                </button>
-              ) : null}
-            </div>
-          </li>
+      <tr key={driver.id} className="border-b border-line last:border-0">
+        <td className={cell}>
+          <span className="block font-medium">{driver.fullName}</span>
+          <span className="text-muted">{driver.phone} · {driver.city}</span>
+        </td>
+        <td className={cell}>{driver.status}</td>
+        <td className={cell}>{formatWhen(driver.createdAt)}</td>
+        <td className={`${cell} whitespace-nowrap`}>
+          <button type="button" className={tinyButton} onClick={() => setOpen(driver)}>{t("admin.review")}</button>
+          {driver.status !== "approved" ? (
+            <button type="button" className={`${tinyPrimary} ms-1`} disabled={busy === driver.id} onClick={() => void review(driver.id, "approved")}>{t("admin.approve")}</button>
+          ) : null}
+          {driver.status !== "rejected" ? (
+            <button type="button" className={`${tinyButton} ms-1`} disabled={busy === driver.id} onClick={() => void review(driver.id, "rejected")}>{t("admin.reject")}</button>
+          ) : null}
+          <button type="button" className={`${tinyButton} ms-1`} onClick={() => setRemoveId(driver.id)}>{t("chef.delete")}</button>
+        </td>
+      </tr>
     );
   }
 
@@ -505,13 +514,11 @@ function DriverDesk({
       {error ? <p className="text-sm text-terracotta-deep">{error}</p> : null}
       <section>
         <h2 className="font-display text-2xl">{t("admin.pendingSection")}</h2>
-        {pending.length === 0 ? <p className="mt-3 text-sm text-muted">{t("admin.noDrivers")}</p> : null}
-        <ul className="mt-3 space-y-3">{pending.map(renderDriver)}</ul>
+        {pending.length === 0 ? <p className="mt-3 text-sm text-muted">{t("admin.noDrivers")}</p> : <PeopleTable rows={pending.map(renderDriver)} />}
       </section>
       <section>
         <h2 className="font-display text-2xl">{t("admin.decidedSection")}</h2>
-        {decided.length === 0 ? <p className="mt-3 text-sm text-muted">{t("admin.noDrivers")}</p> : null}
-        <ul className="mt-3 space-y-3">{decided.map(renderDriver)}</ul>
+        {decided.length === 0 ? <p className="mt-3 text-sm text-muted">{t("admin.noDrivers")}</p> : <PeopleTable rows={decided.map(renderDriver)} />}
       </section>
       {open ? (
         <ReviewModal
@@ -537,6 +544,7 @@ function DriverDesk({
           onBalance={() => onChanged()}
         />
       ) : null}
+      {removeId ? <DeleteDialog busy={busy === removeId} onCancel={() => setRemoveId(null)} onConfirm={() => void remove(removeId)} /> : null}
     </div>
   );
 }
@@ -564,21 +572,21 @@ function AllUsers() {
         <table className="w-full text-start text-sm">
           <thead>
             <tr className="border-b border-line text-muted">
-              <th className="px-3 py-2 font-medium">{t("order.name")}</th>
-              <th className="px-3 py-2 font-medium">{t("admin.userRole")}</th>
-              <th className="px-3 py-2 font-medium">{t("admin.userStatus")}</th>
-              <th className="px-3 py-2 font-medium">{t("chef.city")}</th>
-              <th className="px-3 py-2 font-medium">{t("auth.email")}</th>
+              <th className="px-2 py-1 text-xs font-medium">{t("order.name")}</th>
+              <th className="px-2 py-1 text-xs font-medium">{t("admin.userRole")}</th>
+              <th className="px-2 py-1 text-xs font-medium">{t("admin.userStatus")}</th>
+              <th className="px-2 py-1 text-xs font-medium">{t("chef.city")}</th>
+              <th className="px-2 py-1 text-xs font-medium">{t("auth.email")}</th>
             </tr>
           </thead>
           <tbody>
             {rows.map((row) => (
               <tr key={`${row.role}-${row.id}`} className="border-b border-line/70">
-                <td className="px-3 py-3">{row.name}</td>
-                <td className="px-3 py-3">{row.role}</td>
-                <td className="px-3 py-3">{row.status}</td>
-                <td className="px-3 py-3">{row.city}</td>
-                <td className="px-3 py-3">{row.email}</td>
+                <td className="px-2 py-1 text-xs">{row.name}</td>
+                <td className="px-2 py-1 text-xs">{row.role}</td>
+                <td className="px-2 py-1 text-xs">{row.status}</td>
+                <td className="px-2 py-1 text-xs">{row.city}</td>
+                <td className="px-2 py-1 text-xs">{row.email}</td>
               </tr>
             ))}
           </tbody>
@@ -612,17 +620,17 @@ function EmailCaptures() {
           <table className="w-full text-start text-sm">
             <thead>
               <tr className="border-b border-line text-muted">
-                <th className="px-3 py-2 font-medium">{t("auth.email")}</th>
-                <th className="px-3 py-2 font-medium">{t("admin.source")}</th>
-                <th className="px-3 py-2 font-medium">{t("admin.capturedAt")}</th>
+                <th className="px-2 py-1 text-xs font-medium">{t("auth.email")}</th>
+                <th className="px-2 py-1 text-xs font-medium">{t("admin.source")}</th>
+                <th className="px-2 py-1 text-xs font-medium">{t("admin.capturedAt")}</th>
               </tr>
             </thead>
             <tbody>
               {rows.map((row) => (
                 <tr key={`${row.source}-${row.email}-${row.created_at}`} className="border-b border-line/70">
-                  <td className="px-3 py-3">{row.email}</td>
-                  <td className="px-3 py-3">{row.source}</td>
-                  <td className="px-3 py-3">{formatWhen(row.created_at)}</td>
+                  <td className="px-2 py-1 text-xs">{row.email}</td>
+                  <td className="px-2 py-1 text-xs">{row.source}</td>
+                  <td className="px-2 py-1 text-xs">{formatWhen(row.created_at)}</td>
                 </tr>
               ))}
             </tbody>
@@ -674,6 +682,193 @@ function ActiveTrips({ deliveries }: { deliveries: ActiveDelivery[] }) {
           </li>
         ))}
       </ul>
+    </section>
+  );
+}
+
+function RangeBar({ value, onChange }: { value: DateRange; onChange: (value: DateRange) => void }) {
+  const { t } = useI18n();
+  const items = [
+    ["today", "admin.range.today"],
+    ["yesterday", "admin.range.yesterday"],
+    ["week", "admin.range.week"],
+    ["month", "admin.range.month"],
+    ["all", "admin.range.all"],
+  ] as const;
+  return (
+    <div className="mt-4 flex flex-wrap gap-1">
+      {items.map(([id, key]) => (
+        <button key={id} type="button" className={value === id ? tinyPrimary : tinyButton} onClick={() => onChange(id)}>
+          {t(key)}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function PeopleTable({ rows }: { rows: ReactNode }) {
+  const { t } = useI18n();
+  return (
+    <div className="mt-3 overflow-x-auto">
+      <table className="w-full min-w-[40rem] text-start">
+        <thead>
+          <tr className="border-b border-line text-muted">
+            <th className={`${cell} text-start font-medium`}>{t("order.name")}</th>
+            <th className={`${cell} text-start font-medium`}>{t("admin.status")}</th>
+            <th className={`${cell} text-start font-medium`}>{t("admin.when")}</th>
+            <th className={cell} />
+          </tr>
+        </thead>
+        <tbody>{rows}</tbody>
+      </table>
+    </div>
+  );
+}
+
+function DeleteDialog({ busy, onCancel, onConfirm }: { busy: boolean; onCancel: () => void; onConfirm: () => void }) {
+  const { t } = useI18n();
+  return (
+    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-[#1E1A15]/60 px-4" role="alertdialog" aria-modal="true">
+      <div className="w-full max-w-lg rounded-3xl border border-line bg-card p-6 text-center shadow-[0_12px_40px_rgba(30,26,21,0.18)]">
+        <p className="text-lg leading-8">{t("admin.deleteAsk")}</p>
+        <div className="mt-6 flex flex-wrap justify-center gap-2">
+          <button type="button" className={primaryButtonClass} disabled={busy} onClick={onConfirm}>{t("chef.delete")}</button>
+          <button type="button" className={quietButtonClass} onClick={onCancel}>{t("order.close")}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function HistoryDesk({
+  refreshKey,
+  drivers,
+  range,
+  onChanged,
+  onToast,
+}: {
+  refreshKey: number;
+  drivers: DriverRecord[];
+  range: DateRange;
+  onChanged: () => void;
+  onToast: (message: string) => void;
+}) {
+  const { t } = useI18n();
+  const [chefs, setChefs] = useState<Chef[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [openChef, setOpenChef] = useState<Chef | null>(null);
+  const [openDriver, setOpenDriver] = useState<DriverRecord | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [removeTarget, setRemoveTarget] = useState<{ kind: "chef" | "driver"; id: string } | null>(null);
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      void fetch("/api/admin/chefs", { cache: "no-store" })
+        .then((response) => readJson<{ chefs: Chef[] }>(response))
+        .then((body) => setChefs(body.chefs))
+        .catch((caught: unknown) => setError(caught instanceof Error ? caught.message : t("admin.loadFailed")));
+    }, 0);
+    return () => window.clearTimeout(timeout);
+  }, [refreshKey, t]);
+
+  const pastChefs = chefs.filter((chef) => (chef.approval_status === "approved" || chef.approval_status === "rejected") && matchesCasablancaRange(chef.createdAt, range));
+  const pastDrivers = drivers.filter((driver) => (driver.status === "approved" || driver.status === "rejected") && matchesCasablancaRange(driver.createdAt, range));
+
+  async function remove() {
+    if (!removeTarget) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const response = await fetch(removeTarget.kind === "chef" ? "/api/admin/chefs" : "/api/admin/drivers", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(removeTarget.kind === "chef" ? { chefId: removeTarget.id } : { driverId: removeTarget.id }),
+      });
+      await readJson(response);
+      if (removeTarget.kind === "chef") setChefs((current) => current.filter((chef) => chef.id !== removeTarget.id));
+      onChanged();
+      onToast(t("chef.delete"));
+      setRemoveTarget(null);
+      setOpenChef(null);
+      setOpenDriver(null);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : t("admin.updateFailed"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="mt-8 rounded-3xl border border-line bg-card p-4">
+      <h2 className="font-display text-2xl">{t("admin.tabHistory")}</h2>
+      {error ? <p className="mt-3 text-sm text-terracotta-deep">{error}</p> : null}
+      {pastChefs.length === 0 && pastDrivers.length === 0 ? <p className="mt-3 text-sm text-muted">{t("admin.noChefs")}</p> : null}
+      {pastChefs.length > 0 ? (
+        <PeopleTable
+          rows={pastChefs.map((chef) => (
+            <tr key={chef.id} className="border-b border-line">
+              <td className={cell}><span className="block font-medium">{chef.fullName}</span><span className="text-muted">{t("admin.roleChef")} · {chef.city}</span></td>
+              <td className={cell}>{chef.approval_status}</td>
+              <td className={cell}>{formatWhen(chef.createdAt)}</td>
+              <td className={`${cell} whitespace-nowrap`}>
+                <button type="button" className={tinyButton} onClick={() => setOpenChef(chef)}>{t("admin.review")}</button>
+                <button type="button" className={`${tinyButton} ms-1`} onClick={() => setRemoveTarget({ kind: "chef", id: chef.id })}>{t("chef.delete")}</button>
+              </td>
+            </tr>
+          ))}
+        />
+      ) : null}
+      {pastDrivers.length > 0 ? (
+        <PeopleTable
+          rows={pastDrivers.map((driver) => (
+            <tr key={driver.id} className="border-b border-line">
+              <td className={cell}><span className="block font-medium">{driver.fullName}</span><span className="text-muted">{t("admin.roleDriver")} · {driver.city}</span></td>
+              <td className={cell}>{driver.status}</td>
+              <td className={cell}>{formatWhen(driver.createdAt)}</td>
+              <td className={`${cell} whitespace-nowrap`}>
+                <button type="button" className={tinyButton} onClick={() => setOpenDriver(driver)}>{t("admin.review")}</button>
+                <button type="button" className={`${tinyButton} ms-1`} onClick={() => setRemoveTarget({ kind: "driver", id: driver.id })}>{t("chef.delete")}</button>
+              </td>
+            </tr>
+          ))}
+        />
+      ) : null}
+      {openChef ? (
+        <ReviewModal
+          busy={busy}
+          view={chefView(openChef)}
+          onClose={() => setOpenChef(null)}
+          onAccept={() => setOpenChef(null)}
+          onReject={() => setOpenChef(null)}
+          onPostpone={() => setOpenChef(null)}
+          onBalance={() => undefined}
+        />
+      ) : null}
+      {openDriver ? (
+        <ReviewModal
+          busy={busy}
+          view={{
+            name: openDriver.fullName,
+            phone: openDriver.phone,
+            city: openDriver.city,
+            bio: openDriver.notes,
+            ownerId: openDriver.ownerId,
+            balanceMad: openDriver.balanceMad,
+            signatureUrl: openDriver.signature_data_url,
+            documents: openDriver.documents.map((document) => ({
+              id: document.id,
+              kind: document.kind,
+              href: `/api/admin/documents/${document.id}`,
+            })),
+          }}
+          onClose={() => setOpenDriver(null)}
+          onAccept={() => setOpenDriver(null)}
+          onReject={() => setOpenDriver(null)}
+          onPostpone={() => setOpenDriver(null)}
+          onBalance={() => onChanged()}
+        />
+      ) : null}
+      {removeTarget ? <DeleteDialog busy={busy} onCancel={() => setRemoveTarget(null)} onConfirm={() => void remove()} /> : null}
     </section>
   );
 }

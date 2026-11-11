@@ -4,6 +4,7 @@ import { useEffect, useState, type ChangeEvent, type FormEvent } from "react";
 import Link from "next/link";
 import { LoginCard } from "@/components/login-card";
 import { ProfileExtras } from "@/components/profile-extras";
+import { ProfilePhoto } from "@/components/site-header";
 import { WalletPanel } from "@/components/wallet-panel";
 import { inputClass, LiveDot, primaryButtonClass, quietButtonClass, StatusPill } from "@/components/ui";
 import { useI18n } from "@/components/language";
@@ -17,17 +18,22 @@ export function ChefDashboard() {
   const { t } = useI18n();
   const { session, error, reload } = useSession();
   const user = session?.user ?? null;
+  const [reapply, setReapply] = useState(false);
 
   useEffect(() => {
     document.title = `${t("login.kitchen")} · Wajbati`;
   }, [t]);
 
+  useEffect(() => {
+    if (window.sessionStorage.getItem("wajbati_chef_reapply") !== "1") return;
+    window.sessionStorage.removeItem("wajbati_chef_reapply");
+    setReapply(true);
+  }, []);
+
   if (!session) {
     return <p className="px-4 py-16 text-sm text-muted">{error ?? t("gate.checking")}</p>;
   }
   if (!user) {
-    const reapply = window.sessionStorage.getItem("wajbati_chef_reapply") === "1";
-    if (reapply) window.sessionStorage.removeItem("wajbati_chef_reapply");
     return <LoginCard desk="chef" onSuccess={reload} startMode={reapply ? "register" : "login"} />;
   }
   if (user.role !== "chef") {
@@ -46,6 +52,8 @@ export function ChefDashboard() {
     <Kitchen
       userName={user.fullName || user.email}
       kitchen={user.kitchenName}
+      city={user.city}
+      bio={user.bio ?? ""}
       approval={user.approvalStatus ?? user.chefApprovalStatus}
       avatar={user.avatarDataUrl ?? null}
       onAvatarSaved={reload}
@@ -93,12 +101,12 @@ function AvatarPicker({ initialSrc, onSaved }: { initialSrc: string | null; onSa
 
   return (
     <div className="mt-4">
-      <label className="inline-flex aspect-square size-36 cursor-pointer items-center justify-center overflow-hidden rounded-full border border-line bg-card shadow-[0_4px_20px_rgba(30,26,21,0.08)]">
+      <label className="inline-flex aspect-square size-32 cursor-pointer items-center justify-center overflow-hidden rounded-full border-4 border-white bg-card shadow-[0_8px_30px_rgba(30,26,21,0.12)]">
         {src ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={src} alt="" className="aspect-square h-full w-full rounded-lg object-cover" />
+          <img src={src} alt="" className="h-full w-full object-cover" />
         ) : (
-          <span className="text-sm text-muted">{t("profile.avatar")}</span>
+          <ProfilePhoto label={t("profile.avatar")} className="size-32 border-0 shadow-none" />
         )}
         <input className="sr-only" type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => void choose(event)} />
       </label>
@@ -110,6 +118,8 @@ function AvatarPicker({ initialSrc, onSaved }: { initialSrc: string | null; onSa
 function Kitchen({
   userName,
   kitchen,
+  city,
+  bio,
   approval,
   avatar,
   onAvatarSaved,
@@ -117,6 +127,8 @@ function Kitchen({
 }: {
   userName: string;
   kitchen: string | null;
+  city: string | null;
+  bio: string;
   approval: ChefBoard["approvalStatus"] | null;
   avatar: string | null;
   onAvatarSaved: () => Promise<void>;
@@ -131,6 +143,7 @@ function Kitchen({
   const [pending, setPending] = useState(false);
   const [preview, setPreview] = useState<string | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
+  const [editingProfile, setEditingProfile] = useState(false);
 
   async function publish(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -225,33 +238,40 @@ function Kitchen({
 
   return (
     <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-10 sm:px-6">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
+      <section className="rounded-3xl border border-line bg-card p-5 shadow-[0_8px_30px_rgba(30,26,21,0.08)] sm:p-8">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="text-sm font-medium text-olive">{kitchen ?? t("chef.kitchenFallback")}</p>
-          <h1 className="mt-1 font-display text-3xl sm:text-4xl">{t("chef.cookingTitle")}</h1>
-          <p className="mt-2 text-sm text-muted">
-            {userName}
-            {data?.serviceDate ? ` · ${formatServiceDate(data.serviceDate)}` : ""}
-          </p>
+          <div className="flex items-center gap-3">
+            <LiveDot />
+            <button type="button" className={quietButtonClass} onClick={() => void logout()}>
+              {t("menu.signOut")}
+            </button>
+          </div>
         </div>
-        <div className="flex items-center gap-3">
-          <LiveDot />
-          <button type="button" className={quietButtonClass} onClick={() => void logout()}>
-            {t("menu.signOut")}
-          </button>
+        <div className="mt-5 flex flex-wrap items-center gap-5">
+          <AvatarPicker initialSrc={avatar} onSaved={onAvatarSaved} />
+          <div className="min-w-0 flex-1">
+            <h1 className="font-display text-4xl leading-tight">{userName}</h1>
+            <p className="mt-1 text-sm text-muted">{data?.serviceDate ? formatServiceDate(data.serviceDate) : t("chef.tabProfile")}</p>
+            <button type="button" className={`${quietButtonClass} mt-4`} onClick={() => setEditingProfile((open) => !open)}>
+              {t("profile.edit")}
+            </button>
+          </div>
         </div>
-      </div>
-
-      <section className="mt-8">
-        <h2 className="font-display text-4xl">{t("chef.tabProfile")}</h2>
-        <AvatarPicker initialSrc={avatar} onSaved={onAvatarSaved} />
-        <ProfileExtras role="chef" />
+        <p className="mt-6 text-sm font-medium text-muted">{t("profile.bio")}</p>
+        <p className="mt-1 text-base leading-7">{bio || "—"}</p>
+        <p className="mt-3 text-sm font-medium text-muted">{t("chef.city")}</p>
+        <p className="mt-1 text-base text-terracotta">{city || "—"}</p>
+        {editingProfile ? <ProfileExtras role="chef" onSaved={onAvatarSaved} /> : null}
         <WalletPanel />
       </section>
 
-      <section className="mt-10">
-        <h2 className="font-display text-4xl">{t("chef.cookingTitle")}</h2>
-        <form onSubmit={publish} className="mt-4 space-y-3 rounded-3xl border border-line bg-card p-5 shadow-[0_4px_20px_rgba(30,26,21,0.08)]">
+      <section className="mt-8 rounded-3xl border border-line bg-card p-5 shadow-[0_8px_30px_rgba(30,26,21,0.08)]">
+        <div className="mb-4 flex items-center gap-3">
+          <ProfilePhoto src={avatar} label={userName} />
+          <h2 className="font-display text-3xl">{t("chef.cookingTitle")}</h2>
+        </div>
+        <form onSubmit={publish} className="space-y-3">
           <label className="block text-sm">
             <span className="mb-1.5 block font-medium">{t("chef.photo")}</span>
             <span className="flex min-h-52 cursor-pointer flex-col items-center justify-center overflow-hidden rounded-3xl border border-dashed border-[#B85C3E]/50 bg-[#B85C3E]/10 px-4 py-6 text-center">

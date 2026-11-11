@@ -5,6 +5,8 @@ import { useI18n } from "@/components/language";
 import { readJson } from "@/lib/read-json";
 import type { SessionResponse } from "@/lib/types";
 
+const sessionListeners = new Set<() => void>();
+
 export function useSession() {
   const { t } = useI18n();
   const [session, setSession] = useState<SessionResponse | null>(null);
@@ -20,12 +22,21 @@ export function useSession() {
     }
   }, [t]);
 
+  const refresh = useCallback(async () => {
+    await reload();
+    sessionListeners.forEach((listener) => listener());
+  }, [reload]);
+
   useEffect(() => {
     const timeout = window.setTimeout(() => {
       void reload();
     }, 0);
-    return () => window.clearTimeout(timeout);
+    sessionListeners.add(reload);
+    return () => {
+      window.clearTimeout(timeout);
+      sessionListeners.delete(reload);
+    };
   }, [reload]);
 
-  return { session, error, reload };
+  return { session, error, reload: refresh };
 }

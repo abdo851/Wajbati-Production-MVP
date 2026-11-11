@@ -35,6 +35,7 @@ export type AuthUser = {
   approvalStatus: ChefApprovalStatus | null;
   emailConfirmed: boolean;
   avatarDataUrl?: string | null;
+  bio?: string | null;
 };
 
 export type DemoAccount = {
@@ -85,6 +86,7 @@ export type Chef = {
   is_active: boolean;
   postponed: boolean;
   balanceMad: number;
+  createdAt: string;
 };
 
 export type PlaceOrderInput = {

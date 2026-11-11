@@ -951,6 +951,7 @@ export function createSupabaseRepository(accessToken?: string) {
         is_active: true,
         postponed: false,
         balanceMad: 0,
+        createdAt: "",
       }));
     },
 
@@ -977,7 +978,16 @@ export function createSupabaseRepository(accessToken?: string) {
         is_active: nextStatus !== "rejected",
         postponed: status === "postponed",
         balanceMad: 0,
+        createdAt: "",
       };
+    },
+
+    async removeChef(): Promise<void> {
+      throw new StoreError("Supabase is not configured. Add the URL and anon key.", 500);
+    },
+
+    async removeDriver(): Promise<void> {
+      throw new StoreError("Supabase is not configured. Add the URL and anon key.", 500);
     },
 
     async saveChefDocument(

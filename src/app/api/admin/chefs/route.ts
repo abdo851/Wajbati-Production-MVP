@@ -12,6 +12,17 @@ export async function GET() {
   });
 }
 
+export async function DELETE(request: Request) {
+  return handle(async () => {
+    const current = await requireDesk("admin");
+    const body = await readBody(request);
+    const chefId = typeof body === "object" && body && "chefId" in body ? String(body.chefId) : "";
+    if (!chefId) throw new Error("That kitchen could not be found.");
+    await getRepository(current.accessToken).removeChef(chefId);
+    return NextResponse.json({ ok: true });
+  });
+}
+
 export async function PATCH(request: Request) {
   return handle(async () => {
     const current = await requireDesk("admin");

@@ -4,6 +4,17 @@ import { getRepository } from "@/lib/db";
 import { handle } from "@/lib/server/http";
 import { parseDriverReview, readBody } from "@/lib/validators";
 
+export async function DELETE(request: Request) {
+  return handle(async () => {
+    const current = await requireDesk("admin");
+    const body = await readBody(request);
+    const driverId = typeof body === "object" && body && "driverId" in body ? String(body.driverId) : "";
+    if (!driverId) throw new Error("That driver could not be found.");
+    await getRepository(current.accessToken).removeDriver(driverId);
+    return NextResponse.json({ ok: true });
+  });
+}
+
 export async function POST(request: Request) {
   return handle(async () => {
     const current = await requireDesk("admin");

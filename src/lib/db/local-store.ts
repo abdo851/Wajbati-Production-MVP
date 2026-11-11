@@ -78,6 +78,7 @@ type Chef = {
   signatureDataUrl: string | null;
   kitchenPhotoDataUrl: string | null;
   postponedAt: string | null;
+  createdAt: string;
 };
 
 type Meal = {
@@ -153,6 +154,7 @@ type Driver = {
   confirmationExpiresAt: string | null;
   signatureDataUrl: string | null;
   notes: string;
+  avatarDataUrl: string | null;
   vehiclePhotoDataUrl: string | null;
   licensePhotoDataUrl: string | null;
   isActive: boolean;
@@ -250,6 +252,7 @@ function seedDrivers(): Driver[] {
     confirmationExpiresAt: null,
     signatureDataUrl: null,
     notes: "",
+    avatarDataUrl: null,
     vehiclePhotoDataUrl: null,
     licensePhotoDataUrl: null,
     isActive: true,
@@ -291,6 +294,7 @@ function seed(): Database {
       signatureDataUrl: null,
       kitchenPhotoDataUrl: null,
       postponedAt: null,
+      createdAt: new Date().toISOString(),
     },
     {
       id: "b3333333-3333-4333-8333-333333333333",
@@ -306,6 +310,7 @@ function seed(): Database {
       signatureDataUrl: null,
       kitchenPhotoDataUrl: null,
       postponedAt: null,
+      createdAt: new Date().toISOString(),
     },
     {
       id: "b4444444-4444-4444-8444-444444444444",
@@ -321,6 +326,7 @@ function seed(): Database {
       signatureDataUrl: null,
       kitchenPhotoDataUrl: null,
       postponedAt: null,
+      createdAt: new Date().toISOString(),
     },
   ];
   const meals: Meal[] = [
@@ -488,6 +494,10 @@ function normalize(db: Database): boolean {
       chef.postponedAt = null;
       changed = true;
     }
+    if (!chef.createdAt) {
+      chef.createdAt = chef.foodSafetyAcceptedAt ?? new Date(0).toISOString();
+      changed = true;
+    }
   }
   const master = DEMO_ACCOUNTS.find((account) => account.role === "admin");
   if (master) {
@@ -558,6 +568,10 @@ function normalize(db: Database): boolean {
     }
     if (driver.notes === undefined) {
       driver.notes = "";
+      changed = true;
+    }
+    if (driver.avatarDataUrl === undefined) {
+      driver.avatarDataUrl = null;
       changed = true;
     }
     if (driver.vehiclePhotoDataUrl === undefined) {
@@ -732,7 +746,7 @@ function mapUser(db: Database, profile: Profile): AuthUser {
     kitchenName: chef?.kitchenName ?? null,
     driverId: null,
     driverStatus: null,
-    city: null,
+    city: chef?.city ?? null,
     phone: profile.phone,
     vehicle: null,
     documentsReady: null,
@@ -740,6 +754,7 @@ function mapUser(db: Database, profile: Profile): AuthUser {
     approvalStatus: chef?.approvalStatus ?? null,
     emailConfirmed: profile.emailConfirmed,
     avatarDataUrl: profile.avatarDataUrl,
+    bio: chef?.bio ?? "",
   };
 }
 
@@ -760,6 +775,8 @@ function mapDriver(db: Database, driver: Driver): AuthUser {
     chefApprovalStatus: null,
     approvalStatus: null,
     emailConfirmed: driver.emailConfirmed,
+    avatarDataUrl: driver.avatarDataUrl,
+    bio: driver.notes,
   };
 }
 
@@ -837,6 +854,7 @@ function toPendingChef(db: Database, chef: Chef): PublicChef {
     is_active: chef.isActive && profile?.isActive !== false,
     postponed: Boolean(chef.postponedAt),
     balanceMad: balanceOf(db, chef.profileId),
+    createdAt: chef.createdAt,
   };
 }
 
@@ -987,6 +1005,7 @@ export async function registerLocalDriver(
       confirmationExpiresAt: confirmation.confirmationExpiresAt,
       signatureDataUrl: input.signature,
       notes: "",
+      avatarDataUrl: null,
       vehiclePhotoDataUrl: null,
       licensePhotoDataUrl: null,
       isActive: true,
@@ -1033,6 +1052,7 @@ export async function registerLocalChef(
       kitchenPhotoDataUrl: null,
       foodSafetyAcceptedAt: new Date().toISOString(),
       postponedAt: null,
+      createdAt: new Date().toISOString(),
     });
     return { user: mapUser(db, profile), confirmationToken: confirmation.confirmationToken };
   }, true);
@@ -1604,6 +1624,37 @@ export const localRepository = {
     return { bytes, contentType: stored.contentType };
   },
 
+  async removeChef(chefId: string): Promise<void> {
+    await withDb(async (db) => {
+      const chef = db.chefs.find((item) => item.id === chefId);
+      if (!chef) throw new StoreError("That kitchen could not be found.", 404);
+      const profile = db.profiles.find((item) => item.id === chef.profileId);
+      if (profile?.role === "admin") throw new StoreError("That account could not be found.", 404);
+      for (const document of db.chefDocuments.filter((item) => item.chefId === chef.id)) {
+        await removePrivateFile(document.storagePath);
+      }
+      db.chefDocuments = db.chefDocuments.filter((item) => item.chefId !== chef.id);
+      db.chefs = db.chefs.filter((item) => item.id !== chef.id);
+      if (profile?.role === "chef") db.profiles = db.profiles.filter((item) => item.id !== profile.id);
+      db.wallets = db.wallets.filter((item) => item.profileId !== chef.profileId);
+      db.wallet_transactions = db.wallet_transactions.filter((item) => item.ownerId !== chef.profileId);
+    }, true);
+  },
+
+  async removeDriver(driverId: string): Promise<void> {
+    await withDb(async (db) => {
+      const driver = db.drivers.find((item) => item.id === driverId);
+      if (!driver) throw new StoreError("That driver could not be found.", 404);
+      for (const document of db.documents.filter((item) => item.driverId === driver.id)) {
+        await removePrivateFile(document.storagePath);
+      }
+      db.documents = db.documents.filter((item) => item.driverId !== driver.id);
+      db.drivers = db.drivers.filter((item) => item.id !== driver.id);
+      db.wallets = db.wallets.filter((item) => item.profileId !== driver.id);
+      db.wallet_transactions = db.wallet_transactions.filter((item) => item.ownerId !== driver.id);
+    }, true);
+  },
+
   async listPendingChefs(): Promise<PublicChef[]> {
     return withDb((db) => {
       return db.chefs
@@ -1755,6 +1806,7 @@ export const localRepository = {
         if (input.kitchenPhotoDataUrl !== undefined) chef.kitchenPhotoDataUrl = input.kitchenPhotoDataUrl;
       }
       if (driver) {
+        if (input.avatarDataUrl !== undefined) driver.avatarDataUrl = input.avatarDataUrl;
         if (input.notes !== undefined) driver.notes = input.notes;
         if (input.vehiclePhotoDataUrl !== undefined) driver.vehiclePhotoDataUrl = input.vehiclePhotoDataUrl;
         if (input.licensePhotoDataUrl !== undefined) driver.licensePhotoDataUrl = input.licensePhotoDataUrl;

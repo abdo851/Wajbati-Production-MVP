@@ -44,7 +44,7 @@ function readFile(file: File | undefined): Promise<string | null> {
   });
 }
 
-export function ProfileExtras({ role }: { role: Role }) {
+export function ProfileExtras({ role, onSaved }: { role: Role; onSaved?: () => Promise<void> }) {
   const { t } = useI18n();
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -71,6 +71,7 @@ export function ProfileExtras({ role }: { role: Role }) {
       const response = await fetch("/api/profile/extras", { method: "POST", body });
       if (!response.ok) throw new Error("save");
       setNotice(t("profile.saved"));
+      await onSaved?.();
     } catch (caught) {
       const message = caught instanceof Error ? caught.message : "";
       setError(message === "upload" ? t("profile.uploadFailed") : t("profile.saveFailed"));

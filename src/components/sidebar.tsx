@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useI18n } from "@/components/language";
+import { ProfilePhoto } from "@/components/site-header";
 import { useSession } from "@/components/use-session";
 
 const NOTICE_KEY = "wajbati_notifications";
@@ -57,6 +58,20 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
             ×
           </button>
         </div>
+
+        {user && (user.role === "chef" || user.role === "driver") ? (
+          <Link
+            href={user.role === "chef" ? "/chef" : "/driver"}
+            className={`${itemClass} mt-6 flex items-center gap-3 font-medium`}
+            onClick={onClose}
+          >
+            <ProfilePhoto src={user.avatarDataUrl} label={t("header.profile")} className="size-12" />
+            <span className="min-w-0">
+              <span className="block truncate">{user.fullName}</span>
+              <span className="block text-sm text-muted">{t("header.profile")}</span>
+            </span>
+          </Link>
+        ) : null}
 
         <section className="mt-6">
           <button
