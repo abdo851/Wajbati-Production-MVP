@@ -5,6 +5,7 @@ import Link from "next/link";
 import { LoginCard } from "@/components/login-card";
 import { ProfileExtras } from "@/components/profile-extras";
 import { ProfilePhoto } from "@/components/site-header";
+import { SecureInbox } from "@/components/secure-chat";
 import { WalletPanel } from "@/components/wallet-panel";
 import { inputClass, LiveDot, primaryButtonClass, quietButtonClass, StatusPill } from "@/components/ui";
 import { useI18n } from "@/components/language";
@@ -398,6 +399,7 @@ function Kitchen({
             ) : null}
           </section>
           <OrderList orders={data?.orders ?? []} onChanged={() => void reload()} />
+          <SecureInbox />
       </div>
     </main>
   );

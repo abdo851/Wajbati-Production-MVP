@@ -6,6 +6,7 @@ import { DocumentUpload } from "@/components/document-upload";
 import { ProfileExtras } from "@/components/profile-extras";
 import { DriverAuth } from "@/components/driver-auth";
 import { ProfilePhoto } from "@/components/site-header";
+import { SecureChat } from "@/components/secure-chat";
 import { WalletPanel } from "@/components/wallet-panel";
 import { useI18n } from "@/components/language";
 import { LiveDot, inputClass, primaryButtonClass, quietButtonClass, StatusPill } from "@/components/ui";
@@ -210,6 +211,7 @@ function Route({
                       onDeliver={(code) => void post("/api/driver/status", { orderId: job.id, action: "deliver", code })}
                     />
                   )}
+                  <SecureChat orderId={job.id} />
                 </div>
               </JobCard>
             ))}

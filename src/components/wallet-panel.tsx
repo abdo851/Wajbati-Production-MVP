@@ -26,6 +26,9 @@ export function WalletPanel() {
       <h2 className="font-display text-2xl">{t("wallet.title")}</h2>
       <p className="mt-2 font-display text-4xl">{formatMad(wallet?.balanceMad ?? 0)}</p>
       <p className="mt-1 text-sm text-muted">{t("wallet.balance")}</p>
+      {wallet && wallet.balanceMad <= 0 ? (
+        <p role="alert" className="mt-3 rounded-2xl bg-terracotta/15 px-3 py-2 text-sm font-medium text-terracotta-deep">{t("wallet.blocked")}</p>
+      ) : null}
       {error ? <p className="mt-3 text-sm text-terracotta-deep">{error}</p> : null}
       <h3 className="mt-4 text-sm font-medium">{t("wallet.history")}</h3>
       {(wallet?.transactions.length ?? 0) === 0 ? <p className="mt-2 text-sm text-muted">{t("wallet.empty")}</p> : null}

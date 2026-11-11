@@ -6,6 +6,7 @@ import { DELIVERY_FEE_MAD } from "@/lib/constants";
 import { formatMad, formatServiceDate, formatWhen } from "@/lib/format";
 import { readJson } from "@/lib/read-json";
 import type { MealListResponse, OrderReceipt, PublicMeal } from "@/lib/types";
+import { SecureChat } from "@/components/secure-chat";
 import { LiveDot, inputClass, primaryButtonClass, quietButtonClass } from "@/components/ui";
 import { useI18n } from "@/components/language";
 import { useLiveQuery } from "@/components/use-live-query";
@@ -132,6 +133,7 @@ function OrderDialog({
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [receipt, setReceipt] = useState<OrderReceipt | null>(null);
+  const [chatOpen, setChatOpen] = useState(false);
   const [email, setEmail] = useState("");
   const [emailState, setEmailState] = useState<"ask" | "saving" | "saved" | "hidden">("ask");
   const { t, lang } = useI18n();
@@ -236,11 +238,23 @@ function OrderDialog({
               {meal.title}
             </h2>
           </div>
-          <button type="button" className={quietButtonClass} onClick={onClose}>
-            {t("order.close")}
-          </button>
+          <div className="flex flex-col items-end gap-2">
+            <button type="button" className={quietButtonClass} onClick={() => setChatOpen(true)}>
+              {t("chat.contact")}
+            </button>
+            <button type="button" className={quietButtonClass} onClick={onClose}>
+              {t("order.close")}
+            </button>
+          </div>
         </div>
-        {receipt ? (
+        {chatOpen ? (
+          <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-5 py-4">
+            <button type="button" className={quietButtonClass} onClick={() => setChatOpen(false)}>
+              {t("chat.back")}
+            </button>
+            <SecureChat mealId={meal.id} />
+          </div>
+        ) : receipt ? (
           <div className="mt-4 space-y-4 overflow-y-auto px-5 pb-5 text-base leading-7">
             {meal.photoUrl ? (
               <div className="aspect-video w-full overflow-hidden rounded-lg">

@@ -9,13 +9,17 @@ import { DEMO_ACCOUNTS } from "@/lib/demo-accounts";
 import { DRIVER_DEMOS } from "@/lib/driver-demos";
 import { StoreError } from "@/lib/errors";
 import { removePrivateFile, writePrivateFile, readPrivateFile } from "@/lib/private-files";
+import { messageSharesContact } from "@/lib/contact-guard";
 import { roundMoney, todayInCasablanca } from "@/lib/format";
 import { assertTransition } from "@/lib/orders";
 import type {
   ActiveDelivery,
   AdminOverview,
   AuthUser,
+  ChatActor,
   ChatThread,
+  CommissionSettings,
+  DirectThread,
   WalletView,
   Chef as PublicChef,
   ChefApplication,
@@ -177,6 +181,19 @@ type ChatRow = {
   createdAt: string;
 };
 
+type DirectRow = {
+  id: string;
+  threadId: string;
+  mealId: string;
+  orderId: string | null;
+  customerId: string | null;
+  senderRole: "customer" | "chef" | "driver";
+  senderId: string;
+  senderName: string;
+  body: string;
+  createdAt: string;
+};
+
 type WalletTxn = {
   id: string;
   ownerId: string;
@@ -197,6 +214,8 @@ type Database = {
   wallets: Wallet[];
   email_captures: EmailCapture[];
   messages: ChatRow[];
+  direct_messages: DirectRow[];
+  settings: CommissionSettings;
   wallet_transactions: WalletTxn[];
 };
 
@@ -407,6 +426,8 @@ function seed(): Database {
     wallets: [],
     email_captures: [],
     messages: [],
+    direct_messages: [],
+    settings: { chefCommissionMad: 1, driverCommissionMad: 1 },
     wallet_transactions: [],
   };
 }
@@ -467,6 +488,14 @@ function normalize(db: Database): boolean {
   }
   if (!Array.isArray(db.messages)) {
     db.messages = [];
+    changed = true;
+  }
+  if (!Array.isArray(db.direct_messages)) {
+    db.direct_messages = [];
+    changed = true;
+  }
+  if (!db.settings || typeof db.settings.chefCommissionMad !== "number" || typeof db.settings.driverCommissionMad !== "number") {
+    db.settings = { chefCommissionMad: 1, driverCommissionMad: 1 };
     changed = true;
   }
   if (!Array.isArray(db.wallet_transactions)) {
@@ -784,11 +813,31 @@ function balanceOf(db: Database, ownerId: string): number {
   return db.wallets.find((item) => item.profileId === ownerId)?.balanceMad ?? 0;
 }
 
-function chargeDriverCommission(db: Database, order: Order) {
-  if (!order.driverId || order.status !== "delivered") return;
-  const already = db.wallet_transactions.some((item) => item.orderId === order.id && item.note === "commission");
-  if (already) return;
-  moveWallet(db, order.driverId, -DRIVER_COMMISSION_MAD, "commission", order.id);
+function settingsOf(db: Database): CommissionSettings {
+  return db.settings ?? { chefCommissionMad: 1, driverCommissionMad: 1 };
+}
+
+function alreadyCharged(db: Database, ownerId: string, orderId: string) {
+  return db.wallet_transactions.some((item) => item.ownerId === ownerId && item.orderId === orderId && item.note === "commission");
+}
+
+function chargeDeliveryCommissions(db: Database, order: Order) {
+  if (order.status !== "delivered") return;
+  const settings = settingsOf(db);
+  const chef = db.chefs.find((item) => item.id === order.chefId);
+  if (chef && settings.chefCommissionMad > 0 && !alreadyCharged(db, chef.profileId, order.id)) {
+    moveWallet(db, chef.profileId, -settings.chefCommissionMad, "commission", order.id);
+  }
+  if (order.driverId && settings.driverCommissionMad > 0 && !alreadyCharged(db, order.driverId, order.id)) {
+    order.driverCommissionMad = settings.driverCommissionMad;
+    moveWallet(db, order.driverId, -settings.driverCommissionMad, "commission", order.id);
+  }
+}
+
+function assertWalletOpen(db: Database, ownerId: string) {
+  if (balanceOf(db, ownerId) <= 0) {
+    throw new StoreError("Your wallet balance is empty. Top it up before publishing or accepting orders.", 403);
+  }
 }
 
 function moveWallet(db: Database, ownerId: string, amountMad: number, note: WalletTxn["note"], orderId: string | null) {
@@ -813,6 +862,90 @@ function moveWallet(db: Database, ownerId: string, amountMad: number, note: Wall
     orderId,
     createdAt: new Date().toISOString(),
   });
+}
+
+function canAccessOrderChat(actor: ChatActor, order: Order) {
+  if (actor.role === "driver" && actor.driverId && order.driverId === actor.driverId) return true;
+  if (actor.role === "customer") {
+    const phone = onlyDigits(actor.phone ?? "");
+    return phone.length >= 8 && phone === onlyDigits(order.customerPhone);
+  }
+  return false;
+}
+
+function assertThreadAccess(db: Database, actor: ChatActor, threadId: string) {
+  if (threadId.startsWith("order:")) {
+    const order = db.orders.find((item) => item.id === threadId.slice("order:".length));
+    if (!order || !canAccessOrderChat(actor, order)) throw new StoreError("Sign in to continue.", 403);
+    return;
+  }
+  const match = /^meal:([^:]+):customer:([^:]+)$/.exec(threadId);
+  if (!match) throw new StoreError("That conversation could not be found.", 404);
+  const meal = db.meals.find((item) => item.id === match[1]);
+  if (!meal) throw new StoreError("That meal could not be found.", 404);
+  if (actor.role === "customer" && actor.id === match[2]) return;
+  if (actor.role === "chef" && actor.chefId === meal.chefId) return;
+  throw new StoreError("Sign in to continue.", 403);
+}
+
+function resolveDirectThread(db: Database, actor: ChatActor, query: { mealId: string | null; orderId: string | null; threadId: string | null }) {
+  if (query.threadId) {
+    assertThreadAccess(db, actor, query.threadId);
+    return query.threadId;
+  }
+  if (query.orderId) {
+    const order = db.orders.find((item) => item.id === query.orderId);
+    if (!order) throw new StoreError("That order could not be found.", 404);
+    if (!canAccessOrderChat(actor, order)) throw new StoreError("Sign in to continue.", 403);
+    return `order:${order.id}`;
+  }
+  if (query.mealId) {
+    const meal = db.meals.find((item) => item.id === query.mealId);
+    if (!meal) throw new StoreError("That meal could not be found.", 404);
+    if (actor.role !== "customer") throw new StoreError("Sign in to continue.", 403);
+    return `meal:${meal.id}:customer:${actor.id}`;
+  }
+  throw new StoreError("That conversation could not be found.", 404);
+}
+
+function toDirectThread(db: Database, actor: ChatActor, threadId: string): DirectThread {
+  const messages = db.direct_messages
+    .filter((item) => item.threadId === threadId)
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  let mealId = messages[0]?.mealId ?? "";
+  let orderId: string | null = messages[0]?.orderId ?? null;
+  let title = "";
+  let peerName = "";
+  if (threadId.startsWith("meal:")) {
+    mealId = threadId.split(":")[1] ?? mealId;
+    const meal = db.meals.find((item) => item.id === mealId);
+    const chef = meal ? db.chefs.find((item) => item.id === meal.chefId) : undefined;
+    title = meal?.title ?? "";
+    peerName = actor.role === "chef" ? (messages.find((item) => item.senderRole === "customer")?.senderName ?? "") : (chef?.kitchenName ?? "");
+  } else if (threadId.startsWith("order:")) {
+    orderId = threadId.slice("order:".length);
+    const order = db.orders.find((item) => item.id === orderId);
+    const meal = order ? db.meals.find((item) => item.id === order.mealId) : undefined;
+    mealId = order?.mealId ?? mealId;
+    title = meal?.title ?? "";
+    if (actor.role === "driver") peerName = order?.customerName ?? "";
+    else peerName = db.drivers.find((item) => item.id === order?.driverId)?.fullName ?? "";
+  }
+  return {
+    threadId,
+    mealId,
+    orderId,
+    title,
+    peerName,
+    messages: messages.map((item) => ({
+      id: item.id,
+      senderRole: item.senderRole,
+      senderName: item.senderName,
+      body: item.body,
+      createdAt: item.createdAt,
+      mine: item.senderId === actor.id,
+    })),
+  };
 }
 
 function threadFor(db: Database, threadId: string): ChatThread | null {
@@ -1279,6 +1412,7 @@ export const localRepository = {
       if (chef.approvalStatus !== "approved") {
         throw new StoreError("Your account is under review. You cannot publish meals until approved.", 403);
       }
+      assertWalletOpen(db, chef.profileId);
       const meal: Meal = {
         id: randomUUID(),
         chefId,
@@ -1372,6 +1506,11 @@ export const localRepository = {
     return withDb((db) => {
       const meal = db.meals.find((item) => item.id === mealId && item.chefId === chefId);
       if (!meal) throw new StoreError("That meal could not be found.", 404);
+      if (isPublished) {
+        const chef = chefFor(db, chefId);
+        if (!chef) throw new StoreError("This kitchen is not active.", 403);
+        assertWalletOpen(db, chef.profileId);
+      }
       meal.isPublished = isPublished;
       return toChefMeal(db, meal);
     }, true);
@@ -1384,7 +1523,7 @@ export const localRepository = {
       assertTransition(order.status, status);
       const previous = order.status;
       order.status = status;
-      if (status === "delivered" && previous !== "delivered") chargeDriverCommission(db, order);
+      if (status === "delivered" && previous !== "delivered") chargeDeliveryCommissions(db, order);
       if (status === "cancelled" && previous !== "cancelled") {
         const meal = db.meals.find((item) => item.id === order.mealId);
         if (meal) {
@@ -1426,6 +1565,8 @@ export const localRepository = {
         commissionPerMealMad: PLATFORM_COMMISSION_MAD,
         deliveryFeeMad: DELIVERY_FEE_MAD,
         driverCommissionPerTripMad: DRIVER_COMMISSION_MAD,
+        chefWalletCommissionMad: settingsOf(db).chefCommissionMad,
+        driverWalletCommissionMad: settingsOf(db).driverCommissionMad,
         serviceDate: today,
         today: snapshot(todayOrders),
         allTime: snapshot(active),
@@ -1495,6 +1636,7 @@ export const localRepository = {
       if (driver.status !== "approved") {
         throw new StoreError("Your application is still waiting for approval.", 403);
       }
+      assertWalletOpen(db, driver.id);
       const order = db.orders.find((item) => item.id === orderId);
       if (!order) throw new StoreError("That delivery could not be found.", 404);
       const chef = db.chefs.find((item) => item.id === order.chefId);
@@ -1533,7 +1675,7 @@ export const localRepository = {
           throw new StoreError("That code does not match.", 409);
         }
         order.status = "delivered";
-        chargeDriverCommission(db, order);
+        chargeDeliveryCommissions(db, order);
       }
       return toJob(db, order);
     }, true);
@@ -1876,6 +2018,61 @@ export const localRepository = {
       const thread = threadFor(db, input.threadId);
       if (!thread) throw new StoreError("That conversation could not be found.", 404);
       return thread;
+    }, true);
+  },
+
+  async openDirectThread(actor: ChatActor, query: { mealId: string | null; orderId: string | null; threadId: string | null }): Promise<DirectThread> {
+    return withDb((db) => toDirectThread(db, actor, resolveDirectThread(db, actor, query)), false);
+  },
+
+  async listDirectThreads(actor: ChatActor): Promise<DirectThread[]> {
+    return withDb((db) => {
+      const ids = [...new Set(db.direct_messages.map((item) => item.threadId))].filter((threadId) => {
+        try {
+          assertThreadAccess(db, actor, threadId);
+          return true;
+        } catch {
+          return false;
+        }
+      });
+      return ids
+        .map((threadId) => toDirectThread(db, actor, threadId))
+        .sort((a, b) => (b.messages.at(-1)?.createdAt ?? "").localeCompare(a.messages.at(-1)?.createdAt ?? ""));
+    }, false);
+  },
+
+  async sendDirectMessage(actor: ChatActor, input: { body: string; mealId: string | null; orderId: string | null; threadId: string | null }): Promise<DirectThread> {
+    if (messageSharesContact(input.body)) {
+      throw new StoreError("Phone numbers, emails, and links are not allowed in chat.", 400);
+    }
+    return withDb((db) => {
+      const threadId = resolveDirectThread(db, actor, input);
+      const mealMatch = /^meal:([^:]+):customer:([^:]+)$/.exec(threadId);
+      const order = threadId.startsWith("order:") ? db.orders.find((item) => item.id === threadId.slice("order:".length)) : undefined;
+      const mealId = mealMatch?.[1] ?? order?.mealId ?? input.mealId ?? "";
+      db.direct_messages.push({
+        id: randomUUID(),
+        threadId,
+        mealId,
+        orderId: order?.id ?? null,
+        customerId: mealMatch?.[2] ?? (actor.role === "customer" ? actor.id : null),
+        senderRole: actor.role === "chef" || actor.role === "driver" ? actor.role : "customer",
+        senderId: actor.id,
+        senderName: actor.fullName,
+        body: input.body,
+        createdAt: new Date().toISOString(),
+      });
+      return toDirectThread(db, actor, threadId);
+    }, true);
+  },
+
+  async updateCommissionSettings(input: CommissionSettings): Promise<CommissionSettings> {
+    return withDb((db) => {
+      db.settings = {
+        chefCommissionMad: input.chefCommissionMad,
+        driverCommissionMad: input.driverCommissionMad,
+      };
+      return db.settings;
     }, true);
   },
 };

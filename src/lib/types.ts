@@ -187,10 +187,44 @@ export type RecentOrder = ChefOrder & {
   kitchenName: string;
 };
 
+export type CommissionSettings = {
+  chefCommissionMad: number;
+  driverCommissionMad: number;
+};
+
+export type ChatActor = {
+  id: string;
+  role: Role;
+  fullName: string;
+  chefId: string | null;
+  driverId: string | null;
+  phone: string | null;
+};
+
+export type DirectMessageView = {
+  id: string;
+  senderRole: "customer" | "chef" | "driver";
+  senderName: string;
+  body: string;
+  createdAt: string;
+  mine: boolean;
+};
+
+export type DirectThread = {
+  threadId: string;
+  mealId: string;
+  orderId: string | null;
+  title: string;
+  peerName: string;
+  messages: DirectMessageView[];
+};
+
 export type AdminOverview = {
   commissionPerMealMad: number;
   deliveryFeeMad: number;
   driverCommissionPerTripMad: number;
+  chefWalletCommissionMad: number;
+  driverWalletCommissionMad: number;
   serviceDate: string;
   today: MoneySnapshot;
   allTime: MoneySnapshot;

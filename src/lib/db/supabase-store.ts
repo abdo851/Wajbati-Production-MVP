@@ -11,6 +11,8 @@ import type {
   AdminOverview,
   AuthUser,
   ChatThread,
+  CommissionSettings,
+  DirectThread,
   Chef,
   ChefApprovalStatus,
   ChefBoard,
@@ -724,6 +726,8 @@ export function createSupabaseRepository(accessToken?: string) {
         commissionPerMealMad: PLATFORM_COMMISSION_MAD,
         deliveryFeeMad: DELIVERY_FEE_MAD,
         driverCommissionPerTripMad: DRIVER_COMMISSION_MAD,
+        chefWalletCommissionMad: 1,
+        driverWalletCommissionMad: 1,
         serviceDate,
         today: snapshot(todayRows),
         allTime: snapshot(rows),
@@ -1096,6 +1100,22 @@ export function createSupabaseRepository(accessToken?: string) {
     },
 
     async sendMessage(): Promise<ChatThread> {
+      throw new StoreError("Supabase is not configured. Add the URL and anon key.", 500);
+    },
+
+    async openDirectThread(): Promise<DirectThread> {
+      throw new StoreError("Supabase is not configured. Add the URL and anon key.", 500);
+    },
+
+    async listDirectThreads(): Promise<DirectThread[]> {
+      return [];
+    },
+
+    async sendDirectMessage(): Promise<DirectThread> {
+      throw new StoreError("Supabase is not configured. Add the URL and anon key.", 500);
+    },
+
+    async updateCommissionSettings(): Promise<CommissionSettings> {
       throw new StoreError("Supabase is not configured. Add the URL and anon key.", 500);
     },
 

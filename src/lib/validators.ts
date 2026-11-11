@@ -356,6 +356,31 @@ export function parseLogin(value: unknown): { email: string; password: string; d
   return { email, password: secret, desk: body.desk };
 }
 
+export function parseDirectMessage(value: unknown): { body: string; mealId: string | null; orderId: string | null; threadId: string | null } {
+  const record = asRecord(value);
+  const body = text(record.body, "Message", 1, 1000);
+  const mealId = record.mealId == null || record.mealId === "" ? null : text(record.mealId, "Meal", 8, 80);
+  const orderId = record.orderId == null || record.orderId === "" ? null : text(record.orderId, "Order", 8, 80);
+  const threadId = record.threadId == null || record.threadId === "" ? null : text(record.threadId, "Thread", 8, 160);
+  if (!mealId && !orderId && !threadId) throw new StoreError("That conversation could not be found.", 404);
+  return { body, mealId, orderId, threadId };
+}
+
+export function parseCommissionSettings(value: unknown): { chefCommissionMad: number; driverCommissionMad: number } {
+  const record = asRecord(value);
+  return {
+    chefCommissionMad: commissionAmount(record.chefCommissionMad),
+    driverCommissionMad: commissionAmount(record.driverCommissionMad),
+  };
+}
+
+function commissionAmount(value: unknown): number {
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > 100) {
+    throw new StoreError("Price must be a number in MAD.", 400);
+  }
+  return Math.round(value * 100) / 100;
+}
+
 export function parseChatMessage(value: unknown): { body: string; threadId: string | null } {
   const record = asRecord(value);
   const threadId = record.threadId == null || record.threadId === "" ? null : text(record.threadId, "Thread", 8, 80);
@@ -371,3 +396,4 @@ export function parseWalletAdjust(value: unknown): { ownerId: string; amountMad:
   }
   return { ownerId, amountMad: Math.round(amount * 100) / 100 };
 }
+

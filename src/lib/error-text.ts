@@ -89,6 +89,8 @@ const exact: Record<string, MessageKey> = {
   "That status change is not allowed.": "err.statusChange",
   "That account could not be found.": "err.accountMissing",
   "That conversation could not be found.": "err.threadMissing",
+  "Your wallet balance is empty. Top it up before publishing or accepting orders.": "err.walletEmpty",
+  "Phone numbers, emails, and links are not allowed in chat.": "err.chatBlocked",
   "Request failed.": "err.request",
   "The server returned an unreadable response.": "err.unreadable",
 };

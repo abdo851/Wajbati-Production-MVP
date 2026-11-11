@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { AdminChat } from "@/components/chat-panel";
 import { LoginCard } from "@/components/login-card";
 import { ReviewModal, type ReviewView } from "@/components/review-modal";
 import { useI18n } from "@/components/language";
-import { LiveDot, primaryButtonClass, quietButtonClass, StatusPill } from "@/components/ui";
+import { LiveDot, inputClass, primaryButtonClass, quietButtonClass, StatusPill } from "@/components/ui";
 import { useLiveQuery } from "@/components/use-live-query";
 import { useSession } from "@/components/use-session";
 import { formatMad, formatServiceDate, formatWhen, matchesCasablancaRange, type DateRange } from "@/lib/format";
@@ -94,6 +94,11 @@ function Desk({ name, onLogout }: { name: string; onLogout: () => Promise<void> 
           <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <Books label={t("admin.week")} books={data.weekBooks} />
           </div>
+          <CommissionEditor
+            chefMad={data.chefWalletCommissionMad}
+            driverMad={data.driverWalletCommissionMad}
+            onSaved={() => void reload()}
+          />
           <p className="mt-3 text-sm text-muted">
             {t("admin.booksNote", {
               delivery: formatMad(data.deliveryFeeMad),
@@ -346,10 +351,12 @@ function PendingChefs({ refreshKey, range, onToast }: { refreshKey: number; rang
         </td>
         <td className={cell}>{chef.approval_status}</td>
         <td className={cell}>{formatWhen(chef.createdAt)}</td>
+        <td className={cell}>{formatMad(chef.balanceMad)}</td>
         <td className={`${cell} whitespace-nowrap`}>
           <button type="button" className={tinyButton} onClick={() => setOpen(chef)}>{t("admin.review")}</button>
           <button type="button" className={`${tinyPrimary} ms-1`} onClick={() => void review(chef.id, "approved")}>{t("admin.approve")}</button>
           <button type="button" className={`${tinyButton} ms-1`} onClick={() => void review(chef.id, "rejected")}>{t("admin.reject")}</button>
+          <TopUpButton ownerId={chef.ownerId} name={chef.fullName} onDone={() => void load()} />
           <button type="button" className={`${tinyButton} ms-1`} onClick={() => setRemoveId(chef.id)}>{t("chef.delete")}</button>
         </td>
       </tr>
@@ -495,6 +502,7 @@ function DriverDesk({
         </td>
         <td className={cell}>{driver.status}</td>
         <td className={cell}>{formatWhen(driver.createdAt)}</td>
+        <td className={cell}>{formatMad(driver.balanceMad)}</td>
         <td className={`${cell} whitespace-nowrap`}>
           <button type="button" className={tinyButton} onClick={() => setOpen(driver)}>{t("admin.review")}</button>
           {driver.status !== "approved" ? (
@@ -503,6 +511,7 @@ function DriverDesk({
           {driver.status !== "rejected" ? (
             <button type="button" className={`${tinyButton} ms-1`} disabled={busy === driver.id} onClick={() => void review(driver.id, "rejected")}>{t("admin.reject")}</button>
           ) : null}
+          <TopUpButton ownerId={driver.ownerId} name={driver.fullName} onDone={onChanged} />
           <button type="button" className={`${tinyButton} ms-1`} onClick={() => setRemoveId(driver.id)}>{t("chef.delete")}</button>
         </td>
       </tr>
@@ -716,6 +725,7 @@ function PeopleTable({ rows }: { rows: ReactNode }) {
             <th className={`${cell} text-start font-medium`}>{t("order.name")}</th>
             <th className={`${cell} text-start font-medium`}>{t("admin.status")}</th>
             <th className={`${cell} text-start font-medium`}>{t("admin.when")}</th>
+            <th className={`${cell} text-start font-medium`}>{t("admin.wallet")}</th>
             <th className={cell} />
           </tr>
         </thead>
@@ -761,12 +771,15 @@ function HistoryDesk({
   const [busy, setBusy] = useState(false);
   const [removeTarget, setRemoveTarget] = useState<{ kind: "chef" | "driver"; id: string } | null>(null);
 
+  async function loadHistory() {
+    const response = await fetch("/api/admin/chefs", { cache: "no-store" });
+    const body = await readJson<{ chefs: Chef[] }>(response);
+    setChefs(body.chefs);
+  }
+
   useEffect(() => {
     const timeout = window.setTimeout(() => {
-      void fetch("/api/admin/chefs", { cache: "no-store" })
-        .then((response) => readJson<{ chefs: Chef[] }>(response))
-        .then((body) => setChefs(body.chefs))
-        .catch((caught: unknown) => setError(caught instanceof Error ? caught.message : t("admin.loadFailed")));
+      void loadHistory().catch((caught: unknown) => setError(caught instanceof Error ? caught.message : t("admin.loadFailed")));
     }, 0);
     return () => window.clearTimeout(timeout);
   }, [refreshKey, t]);
@@ -810,8 +823,10 @@ function HistoryDesk({
               <td className={cell}><span className="block font-medium">{chef.fullName}</span><span className="text-muted">{t("admin.roleChef")} · {chef.city}</span></td>
               <td className={cell}>{chef.approval_status}</td>
               <td className={cell}>{formatWhen(chef.createdAt)}</td>
+              <td className={cell}>{formatMad(chef.balanceMad)}</td>
               <td className={`${cell} whitespace-nowrap`}>
-                <button type="button" className={tinyButton} onClick={() => setOpenChef(chef)}>{t("admin.review")}</button>
+                <TopUpButton ownerId={chef.ownerId} name={chef.fullName} onDone={() => { void loadHistory(); onChanged(); }} />
+                <button type="button" className={`${tinyButton} ms-1`} onClick={() => setOpenChef(chef)}>{t("admin.viewProfile")}</button>
                 <button type="button" className={`${tinyButton} ms-1`} onClick={() => setRemoveTarget({ kind: "chef", id: chef.id })}>{t("chef.delete")}</button>
               </td>
             </tr>
@@ -825,8 +840,10 @@ function HistoryDesk({
               <td className={cell}><span className="block font-medium">{driver.fullName}</span><span className="text-muted">{t("admin.roleDriver")} · {driver.city}</span></td>
               <td className={cell}>{driver.status}</td>
               <td className={cell}>{formatWhen(driver.createdAt)}</td>
+              <td className={cell}>{formatMad(driver.balanceMad)}</td>
               <td className={`${cell} whitespace-nowrap`}>
-                <button type="button" className={tinyButton} onClick={() => setOpenDriver(driver)}>{t("admin.review")}</button>
+                <TopUpButton ownerId={driver.ownerId} name={driver.fullName} onDone={onChanged} />
+                <button type="button" className={`${tinyButton} ms-1`} onClick={() => setOpenDriver(driver)}>{t("admin.viewProfile")}</button>
                 <button type="button" className={`${tinyButton} ms-1`} onClick={() => setRemoveTarget({ kind: "driver", id: driver.id })}>{t("chef.delete")}</button>
               </td>
             </tr>
@@ -870,5 +887,99 @@ function HistoryDesk({
       ) : null}
       {removeTarget ? <DeleteDialog busy={busy} onCancel={() => setRemoveTarget(null)} onConfirm={() => void remove()} /> : null}
     </section>
+  );
+}
+
+function CommissionEditor({ chefMad, driverMad, onSaved }: { chefMad: number; driverMad: number; onSaved: () => void }) {
+  const { t } = useI18n();
+  const [chef, setChef] = useState(String(chefMad));
+  const [driver, setDriver] = useState(String(driverMad));
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function save(event: FormEvent) {
+    event.preventDefault();
+    setBusy(true);
+    setError(null);
+    try {
+      await readJson(await fetch("/api/admin/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chefCommissionMad: Number(chef), driverCommissionMad: Number(driver) }),
+      }));
+      onSaved();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : t("admin.updateFailed"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form onSubmit={(event) => void save(event)} className="mt-6 rounded-3xl border border-line bg-card p-4">
+      <h2 className="font-display text-2xl">{t("admin.commissionSettings")}</h2>
+      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+        <label className="text-xs">
+          <span className="mb-1 block font-medium">{t("admin.chefCommission")}</span>
+          <input className={inputClass} type="number" min={0} max={100} step="0.5" value={chef} onChange={(event) => setChef(event.target.value)} required />
+        </label>
+        <label className="text-xs">
+          <span className="mb-1 block font-medium">{t("admin.driverCommission")}</span>
+          <input className={inputClass} type="number" min={0} max={100} step="0.5" value={driver} onChange={(event) => setDriver(event.target.value)} required />
+        </label>
+      </div>
+      {error ? <p className="mt-2 text-sm text-terracotta-deep">{error}</p> : null}
+      <button type="submit" className={`${tinyPrimary} mt-3`} disabled={busy}>{t("admin.saveSettings")}</button>
+    </form>
+  );
+}
+
+function TopUpButton({ ownerId, name, onDone }: { ownerId: string; name: string; onDone: () => void }) {
+  const { t } = useI18n();
+  const [open, setOpen] = useState(false);
+  const [amount, setAmount] = useState("50");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const value = Number(amount);
+
+  async function confirm() {
+    if (!Number.isFinite(value) || value <= 0) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await readJson(await fetch("/api/admin/wallets", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ownerId, amountMad: value }),
+      }));
+      setOpen(false);
+      onDone();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : t("admin.updateFailed"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <>
+      <button type="button" className={`${tinyPrimary} ms-1`} onClick={() => setOpen(true)}>{t("admin.topUp")}</button>
+      {open ? (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-[#1E1A15]/60 px-4" role="alertdialog" aria-modal="true">
+          <div className="w-full max-w-lg rounded-3xl border border-line bg-card p-6 text-center shadow-[0_12px_40px_rgba(30,26,21,0.18)]" onClick={(event) => event.stopPropagation()}>
+            <label className="block text-sm">
+              <span className="mb-1.5 block font-medium">{t("admin.topUpAmount")}</span>
+              <input className={inputClass} type="number" min={1} max={100000} step="1" value={amount} onChange={(event) => setAmount(event.target.value)} />
+            </label>
+            <p className="mt-4 text-lg leading-8">{t("admin.topUpAsk", { amount: Number.isFinite(value) ? value : 0, name })}</p>
+            {error ? <p className="mt-3 text-sm text-terracotta-deep">{error}</p> : null}
+            <div className="mt-6 flex flex-wrap justify-center gap-2">
+              <button type="button" className={primaryButtonClass} disabled={busy || !Number.isFinite(value) || value <= 0} onClick={() => void confirm()}>{t("admin.topUp")}</button>
+              <button type="button" className={quietButtonClass} onClick={() => setOpen(false)}>{t("order.close")}</button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </>
   );
 }

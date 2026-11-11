@@ -4,6 +4,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { PasswordField } from "@/components/password-field";
 import { ProfileExtras } from "@/components/profile-extras";
+import { SecureChat } from "@/components/secure-chat";
 import { useI18n } from "@/components/language";
 import { useSession } from "@/components/use-session";
 import { inputClass, primaryButtonClass, quietButtonClass, StatusPill } from "@/components/ui";
@@ -194,6 +195,11 @@ export function AccountPanel() {
                 {order.kitchenName} · {formatMad(order.totalMad + order.deliveryFeeMad, lang)} · {formatWhen(order.createdAt, lang)}
               </p>
               {order.deliveryCode ? <p className="mt-2 font-display text-3xl tracking-[0.25em]">{order.deliveryCode}</p> : null}
+              {order.status === "assigned" || order.status === "picked_up" || order.status === "delivered" ? (
+                <div className="mt-4">
+                  <SecureChat orderId={order.id} />
+                </div>
+              ) : null}
             </li>
           ))}
         </ul>
