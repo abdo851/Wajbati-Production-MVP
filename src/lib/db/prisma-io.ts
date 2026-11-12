@@ -391,8 +391,6 @@ async function writeGraph(tx: Writer, db: Database) {
 }
 
 export async function loadGraph(): Promise<Database | null> {
-  const count = await prisma.user.count();
-  if (count === 0) return null;
   const [users, chefs, drivers, meals, orders, transactions, messages, support, files, captures, settings] = await Promise.all([
     prisma.user.findMany(),
     prisma.chefProfile.findMany(),
@@ -406,6 +404,7 @@ export async function loadGraph(): Promise<Database | null> {
     prisma.emailCapture.findMany(),
     prisma.platformSetting.findUnique({ where: { id: "default" } }),
   ]);
+  if (users.length === 0) return null;
   const usersById = new Map(users.map((user) => [user.id, user]));
   const profiles: Database["profiles"] = users
     .filter((user) => user.role !== "DRIVER")

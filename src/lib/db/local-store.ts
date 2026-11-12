@@ -11,7 +11,7 @@ import { DRIVER_DEMOS } from "@/lib/driver-demos";
 import { StoreError } from "@/lib/errors";
 import { removePrivateFile, writePrivateFile, readPrivateFile } from "@/lib/private-files";
 import { messageSharesContact } from "@/lib/contact-guard";
-import { roundMoney, todayInCasablanca } from "@/lib/format";
+import { roundMoney, serviceDateInHistory, todayInCasablanca } from "@/lib/format";
 import { assertTransition } from "@/lib/orders";
 import type {
   ActiveDelivery,
@@ -657,14 +657,42 @@ function normalize(db: Database): boolean {
   return changed;
 }
 
-async function readDb(): Promise<{ db: Database; created: boolean; migrated: boolean }> {
+const READ_CACHE_MS = 2000;
+let readCache: { at: number; db: Database } | null = null;
+
+function rememberDb(db: Database) {
+  readCache = { at: Date.now(), db: structuredClone(db) };
+}
+
+async function loadGraphWithRetry() {
+  let lastError: unknown;
+  for (let attempt = 0; attempt <= 3; attempt += 1) {
+    try {
+      return await loadGraph();
+    } catch (error) {
+      lastError = error;
+      if (attempt === 3) break;
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+    }
+  }
+  throw lastError;
+}
+
+async function readDb(fresh = false): Promise<{ db: Database; created: boolean; migrated: boolean }> {
+  if (!fresh && readCache && Date.now() - readCache.at < READ_CACHE_MS) {
+    return { db: structuredClone(readCache.db), created: false, migrated: false };
+  }
   let existing: Database | null = null;
   try {
-    existing = await loadGraph();
+    existing = await loadGraphWithRetry();
   } catch {
     throw new StoreError("The order book could not be read.", 500);
   }
-  if (existing) return { db: existing, created: false, migrated: normalize(existing) };
+  if (existing) {
+    const migrated = normalize(existing);
+    if (!migrated) rememberDb(existing);
+    return { db: existing, created: false, migrated };
+  }
   try {
     const raw = await readFile(filePath, "utf8");
     const db = JSON.parse(raw) as Database;
@@ -679,11 +707,12 @@ async function readDb(): Promise<{ db: Database; created: boolean; migrated: boo
 
 async function writeDb(db: Database) {
   await saveGraph(db);
+  rememberDb(db);
 }
 
 async function withDb<T>(fn: (db: Database) => T | Promise<T>, persist: boolean): Promise<T> {
   return locked(async () => {
-    const loaded = await readDb();
+    const loaded = await readDb(persist);
     if (loaded.created || loaded.migrated) await writeDb(loaded.db);
     const result = await fn(loaded.db);
     if (persist) await writeDb(loaded.db);
@@ -1376,8 +1405,8 @@ export const localRepository = {
     return withDb((db) => {
       const today = todayInCasablanca();
       const meals = db.meals
-        .filter((meal) => meal.chefId === chefId)
-        .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+        .filter((meal) => meal.chefId === chefId && serviceDateInHistory(meal.serviceDate))
+        .sort((a, b) => b.serviceDate.localeCompare(a.serviceDate) || b.createdAt.localeCompare(a.createdAt))
         .map((meal) => toChefMeal(db, meal));
       const orders = db.orders
         .filter(

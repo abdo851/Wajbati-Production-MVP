@@ -39,7 +39,7 @@ function MenuButton({ open, onClick }: { open: boolean; onClick: () => void }) {
   return (
     <button
       type="button"
-      className="inline-flex size-11 items-center justify-center rounded-lg border border-line bg-card shadow-[0_4px_20px_rgba(30,26,21,0.08)]"
+      className="inline-flex size-10 items-center justify-center rounded-full border border-line bg-card"
       aria-expanded={open}
       aria-label={t("menu.open")}
       onClick={onClick}
@@ -63,17 +63,17 @@ export function SiteHeader() {
 
   return (
     <>
-      <header className="sticky top-0 z-20 border-b border-line/80 bg-background/80 shadow-[0_4px_20px_rgba(30,26,21,0.08)] backdrop-blur-md">
-        <div className="mx-auto flex h-16 max-w-6xl items-center gap-2 px-3 sm:px-6">
+      <header className="sticky top-0 z-20 border-b border-line/80 bg-background/90 shadow-[0_1px_0_rgba(30,26,21,0.04)] backdrop-blur-md">
+        <div className="mx-auto flex h-14 max-w-6xl items-center gap-2 px-3 sm:px-5">
           <MenuButton open={open} onClick={() => setOpen(true)} />
           <Link href="/" className="flex min-w-0 items-center gap-2">
             <Mark />
-            <span className="truncate font-display text-2xl leading-none">{lang === "ar" ? "وجبتي" : "Wajbati"}</span>
+            <span className="truncate font-display text-xl leading-none">{lang === "ar" ? "وجبتي" : "Wajbati"}</span>
           </Link>
-          <div className="ms-auto flex items-center gap-2">
+          <div className="ms-auto flex items-center gap-1.5">
             {deskHref ? (
               <Link href={deskHref} aria-label={t("header.profile")} className="inline-flex rounded-full">
-                <ProfilePhoto src={user?.avatarDataUrl} label={t("header.profile")} />
+                <ProfilePhoto src={user?.avatarDataUrl} label={t("header.profile")} className="size-9" />
               </Link>
             ) : null}
             <LanguageMenu />

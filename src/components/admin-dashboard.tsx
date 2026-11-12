@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
+import toast from "react-hot-toast";
 import { AdminChat } from "@/components/chat-panel";
 import { LoginCard } from "@/components/login-card";
 import { ReviewModal, type ReviewView } from "@/components/review-modal";
@@ -13,9 +14,17 @@ import { readJson } from "@/lib/read-json";
 import { isSuperAdmin } from "@/lib/super-admin";
 import type { ActiveDelivery, AdminOverview, Chef, DriverRecord, FinanceSummary, StaffAccount } from "@/lib/types";
 
-const tinyButton = "inline-flex items-center justify-center rounded-lg border border-line bg-white px-2 py-1 text-xs font-medium";
-const tinyPrimary = "inline-flex items-center justify-center rounded-lg bg-saffron px-2 py-1 text-xs font-medium";
+const tinyButton = "inline-flex items-center justify-center rounded-full border border-line bg-white px-2.5 py-1 text-xs font-medium shadow-[0_1px_2px_rgba(30,26,21,0.05)]";
+const tinyPrimary = "inline-flex items-center justify-center rounded-full bg-[#D89B3D] px-2.5 py-1 text-xs font-semibold text-[#1E1A15] shadow-[0_1px_2px_rgba(30,26,21,0.08)]";
 const cell = "px-2 py-1 text-xs";
+
+function notify(message: string, tone: "ok" | "warn" = "ok") {
+  if (tone === "warn") {
+    toast(message, { style: { background: "#8C3E28", color: "#FAF6EF" } });
+    return;
+  }
+  toast.success(message);
+}
 
 export function AdminDashboard() {
   const { t } = useI18n();
@@ -28,10 +37,9 @@ export function AdminDashboard() {
 
 function Desk({ name, onLogout }: { name: string; onLogout: () => Promise<void> }) {
   const { t } = useI18n();
-  const { data, error, loading, reload } = useLiveQuery<AdminOverview>("/api/admin/overview");
+  const { data, error, loading, reconnecting, reload } = useLiveQuery<AdminOverview>("/api/admin/overview");
   const [tab, setTab] = useState<"orders" | "chefs" | "drivers" | "history" | "emails" | "messages" | "users">("orders");
   const [range, setRange] = useState<DateRange>("all");
-  const [toast, setToast] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const tabs = [
     ["orders", t("admin.tabOrders")],
@@ -75,6 +83,7 @@ function Desk({ name, onLogout }: { name: string; onLogout: () => Promise<void> 
           {error}
         </p>
       ) : null}
+      {reconnecting && data ? <p className="mt-4 text-sm text-muted">{t("live.reconnecting")}</p> : null}
       <div className="mt-6 flex flex-wrap gap-2">
         {tabs.map(([id, label]) => (
           <button key={id} type="button" className={tab === id ? primaryButtonClass : quietButtonClass} onClick={() => setTab(id)}>
@@ -84,7 +93,9 @@ function Desk({ name, onLogout }: { name: string; onLogout: () => Promise<void> 
       </div>
       {tab === "orders" || tab === "chefs" || tab === "drivers" || tab === "history" ? <RangeBar value={range} onChange={setRange} /> : null}
 
-      {loading && !data && tab !== "emails" && tab !== "chefs" ? <p className="mt-8 text-sm text-muted">{t("admin.loading")}</p> : null}
+      {(loading || reconnecting) && !data && tab !== "emails" && tab !== "chefs" ? (
+        <p className="mt-8 text-sm text-muted">{reconnecting ? t("live.reconnecting") : t("admin.loading")}</p>
+      ) : null}
 
       {tab === "orders" && data ? (
         <>
@@ -247,33 +258,23 @@ function Desk({ name, onLogout }: { name: string; onLogout: () => Promise<void> 
           <ActiveTrips deliveries={data.activeDeliveries.filter((trip) => matchesCasablancaRange(trip.createdAt, range))} />
         </>
       ) : null}
-      {tab === "chefs" ? <div className="mt-8"><PendingChefs refreshKey={refreshKey} range={range} onToast={setToast} /></div> : null}
-      {tab === "drivers" && data ? <DriverDesk drivers={data.drivers} range={range} onChanged={() => void reload()} onToast={setToast} /> : null}
-      {tab === "history" && data ? <HistoryDesk refreshKey={refreshKey} drivers={data.drivers} range={range} onChanged={() => void reload()} onToast={setToast} /> : null}
+      {tab === "chefs" ? <div className="mt-8"><PendingChefs refreshKey={refreshKey} range={range} onToast={notify} /></div> : null}
+      {tab === "drivers" && data ? <DriverDesk drivers={data.drivers} range={range} onChanged={() => void reload()} onToast={notify} /> : null}
+      {tab === "history" && data ? <HistoryDesk refreshKey={refreshKey} drivers={data.drivers} range={range} onChanged={() => void reload()} onToast={notify} /> : null}
       {tab === "users" ? <AllUsers /> : null}
       {tab === "emails" ? <EmailCaptures /> : null}
       {tab === "messages" ? <AdminChat /> : null}
-      {toast ? (
-        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-[#1E1A15]/60 px-4" role="alertdialog" aria-modal="true">
-          <div className="w-full max-w-lg rounded-3xl bg-[#1E1A15] px-8 py-10 text-center shadow-2xl">
-            <p className="font-display text-3xl leading-snug text-[#FAF6EF]">{toast}</p>
-            <button type="button" className={`${primaryButtonClass} mt-8`} onClick={() => setToast(null)}>
-              {t("order.close")}
-            </button>
-          </div>
-        </div>
-      ) : null}
     </main>
   );
 }
 
-function PendingChefs({ refreshKey, range, onToast }: { refreshKey: number; range: DateRange; onToast: (message: string) => void }) {
+function PendingChefs({ refreshKey, range, onToast }: { refreshKey: number; range: DateRange; onToast: (message: string, tone?: "ok" | "warn") => void }) {
   const { t } = useI18n();
   const [chefs, setChefs] = useState<Chef[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState<Chef | null>(null);
   const [busy, setBusy] = useState(false);
-  const [removeId, setRemoveId] = useState<string | null>(null);
+  const [pendingAction, setPendingAction] = useState<null | { kind: "reject" | "delete"; id: string }>(null);
 
   async function load() {
     const response = await fetch("/api/admin/chefs", { cache: "no-store" });
@@ -310,7 +311,9 @@ function PendingChefs({ refreshKey, range, onToast }: { refreshKey: number; rang
           chef.id === chefId ? { ...chef, approval_status: status === "postponed" ? chef.approval_status : status, is_active: updatedChefObject.isActive } : chef,
         ),
       );
-      onToast(status === "rejected" ? t("admin.rejectedToast") : status === "approved" ? t("admin.approvedToast") : t("admin.postpone"));
+      if (status === "approved") onToast(t("admin.approvedToast"), "ok");
+      else if (status === "rejected") onToast(t("admin.rejectedToast"), "warn");
+      else onToast(t("admin.postpone"), "ok");
       if (status !== "postponed") setOpen(null);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : t("admin.updateFailed"));
@@ -330,7 +333,7 @@ function PendingChefs({ refreshKey, range, onToast }: { refreshKey: number; rang
       });
       await readJson(response);
       setChefs((current) => current.filter((chef) => chef.id !== chefId));
-      setRemoveId(null);
+      onToast(t("admin.deletedToast"), "warn");
       if (open?.id === chefId) setOpen(null);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : t("admin.updateFailed"));
@@ -355,9 +358,9 @@ function PendingChefs({ refreshKey, range, onToast }: { refreshKey: number; rang
         <td className={`${cell} whitespace-nowrap`}>
           <button type="button" className={tinyButton} onClick={() => setOpen(chef)}>{t("admin.review")}</button>
           <button type="button" className={`${tinyPrimary} ms-1`} onClick={() => void review(chef.id, "approved")}>{t("admin.approve")}</button>
-          <button type="button" className={`${tinyButton} ms-1`} onClick={() => void review(chef.id, "rejected")}>{t("admin.reject")}</button>
-          <TopUpButton ownerId={chef.ownerId} name={chef.fullName} onDone={() => void load()} />
-          <button type="button" className={`${tinyButton} ms-1`} onClick={() => setRemoveId(chef.id)}>{t("chef.delete")}</button>
+          <button type="button" className={`${tinyButton} ms-1`} onClick={() => setPendingAction({ kind: "reject", id: chef.id })}>{t("admin.reject")}</button>
+          <TopUpButton ownerId={chef.ownerId} name={chef.fullName} onDone={() => void load()} onToast={onToast} />
+          <button type="button" className={`${tinyButton} ms-1`} onClick={() => setPendingAction({ kind: "delete", id: chef.id })}>{t("chef.delete")}</button>
         </td>
       </tr>
     );
@@ -380,12 +383,22 @@ function PendingChefs({ refreshKey, range, onToast }: { refreshKey: number; rang
           view={chefView(open)}
           onClose={() => setOpen(null)}
           onAccept={() => void review(open.id, "approved")}
-          onReject={() => void review(open.id, "rejected")}
+          onReject={() => setPendingAction({ kind: "reject", id: open.id })}
           onPostpone={() => void review(open.id, "postponed")}
           onBalance={(balanceMad) => setOpen({ ...open, balanceMad })}
         />
       ) : null}
-      {removeId ? <DeleteDialog busy={busy} onCancel={() => setRemoveId(null)} onConfirm={() => void remove(removeId)} /> : null}
+      {pendingAction ? (
+        <DeleteDialog
+          busy={busy}
+          onCancel={() => setPendingAction(null)}
+          onConfirm={() => {
+            const action = pendingAction;
+            if (action.kind === "delete") void remove(action.id).then(() => setPendingAction(null));
+            else void review(action.id, "rejected").then(() => setPendingAction(null));
+          }}
+        />
+      ) : null}
     </div>
   );
 }
@@ -442,13 +455,13 @@ function DriverDesk({
   drivers: DriverRecord[];
   range: DateRange;
   onChanged: () => void;
-  onToast: (message: string) => void;
+  onToast: (message: string, tone?: "ok" | "warn") => void;
 }) {
   const { t } = useI18n();
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [open, setOpen] = useState<DriverRecord | null>(null);
-  const [removeId, setRemoveId] = useState<string | null>(null);
+  const [pendingAction, setPendingAction] = useState<null | { kind: "reject" | "delete"; id: string }>(null);
 
   async function review(driverId: string, status: "approved" | "rejected" | "postponed") {
     setBusy(driverId);
@@ -461,7 +474,9 @@ function DriverDesk({
       });
       await readJson(response);
       onChanged();
-      onToast(status === "rejected" ? t("admin.rejectedToast") : status === "approved" ? t("admin.approvedToast") : t("admin.postpone"));
+      if (status === "approved") onToast(t("admin.approvedToast"), "ok");
+      else if (status === "rejected") onToast(t("admin.rejectedToast"), "warn");
+      else onToast(t("admin.postpone"), "ok");
       if (status !== "postponed") setOpen(null);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : t("admin.updateFailed"));
@@ -480,7 +495,7 @@ function DriverDesk({
         body: JSON.stringify({ driverId }),
       });
       await readJson(response);
-      setRemoveId(null);
+      onToast(t("admin.deletedToast"), "warn");
       if (open?.id === driverId) setOpen(null);
       onChanged();
     } catch (caught) {
@@ -509,10 +524,10 @@ function DriverDesk({
             <button type="button" className={`${tinyPrimary} ms-1`} disabled={busy === driver.id} onClick={() => void review(driver.id, "approved")}>{t("admin.approve")}</button>
           ) : null}
           {driver.status !== "rejected" ? (
-            <button type="button" className={`${tinyButton} ms-1`} disabled={busy === driver.id} onClick={() => void review(driver.id, "rejected")}>{t("admin.reject")}</button>
+            <button type="button" className={`${tinyButton} ms-1`} disabled={busy === driver.id} onClick={() => setPendingAction({ kind: "reject", id: driver.id })}>{t("admin.reject")}</button>
           ) : null}
-          <TopUpButton ownerId={driver.ownerId} name={driver.fullName} onDone={onChanged} />
-          <button type="button" className={`${tinyButton} ms-1`} onClick={() => setRemoveId(driver.id)}>{t("chef.delete")}</button>
+          <TopUpButton ownerId={driver.ownerId} name={driver.fullName} onDone={onChanged} onToast={onToast} />
+          <button type="button" className={`${tinyButton} ms-1`} onClick={() => setPendingAction({ kind: "delete", id: driver.id })}>{t("chef.delete")}</button>
         </td>
       </tr>
     );
@@ -548,12 +563,22 @@ function DriverDesk({
           }}
           onClose={() => setOpen(null)}
           onAccept={() => void review(open.id, "approved")}
-          onReject={() => void review(open.id, "rejected")}
+          onReject={() => setPendingAction({ kind: "reject", id: open.id })}
           onPostpone={() => void review(open.id, "postponed")}
           onBalance={() => onChanged()}
         />
       ) : null}
-      {removeId ? <DeleteDialog busy={busy === removeId} onCancel={() => setRemoveId(null)} onConfirm={() => void remove(removeId)} /> : null}
+      {pendingAction ? (
+        <DeleteDialog
+          busy={busy === pendingAction.id}
+          onCancel={() => setPendingAction(null)}
+          onConfirm={() => {
+            const action = pendingAction;
+            const done = action.kind === "delete" ? remove(action.id) : review(action.id, "rejected");
+            void done.then(() => setPendingAction(null));
+          }}
+        />
+      ) : null}
     </div>
   );
 }
@@ -740,9 +765,9 @@ function DeleteDialog({ busy, onCancel, onConfirm }: { busy: boolean; onCancel: 
   return (
     <div className="fixed inset-0 z-[80] flex items-center justify-center bg-[#1E1A15]/60 px-4" role="alertdialog" aria-modal="true">
       <div className="w-full max-w-lg rounded-3xl border border-line bg-card p-6 text-center shadow-[0_12px_40px_rgba(30,26,21,0.18)]">
-        <p className="text-lg leading-8">{t("admin.deleteAsk")}</p>
+        <p className="font-display text-2xl leading-snug">{t("admin.actionAsk")}</p>
         <div className="mt-6 flex flex-wrap justify-center gap-2">
-          <button type="button" className={primaryButtonClass} disabled={busy} onClick={onConfirm}>{t("chef.delete")}</button>
+          <button type="button" className={primaryButtonClass} disabled={busy} onClick={onConfirm}>{t("admin.confirmAction")}</button>
           <button type="button" className={quietButtonClass} onClick={onCancel}>{t("order.close")}</button>
         </div>
       </div>
@@ -761,7 +786,7 @@ function HistoryDesk({
   drivers: DriverRecord[];
   range: DateRange;
   onChanged: () => void;
-  onToast: (message: string) => void;
+  onToast: (message: string, tone?: "ok" | "warn") => void;
 }) {
   const { t } = useI18n();
   const [chefs, setChefs] = useState<Chef[]>([]);
@@ -800,7 +825,7 @@ function HistoryDesk({
       await readJson(response);
       if (removeTarget.kind === "chef") setChefs((current) => current.filter((chef) => chef.id !== removeTarget.id));
       onChanged();
-      onToast(t("chef.delete"));
+      onToast(t("admin.deletedToast"), "warn");
       setRemoveTarget(null);
       setOpenChef(null);
       setOpenDriver(null);
@@ -825,7 +850,7 @@ function HistoryDesk({
               <td className={cell}>{formatWhen(chef.createdAt)}</td>
               <td className={cell}>{formatMad(chef.balanceMad)}</td>
               <td className={`${cell} whitespace-nowrap`}>
-                <TopUpButton ownerId={chef.ownerId} name={chef.fullName} onDone={() => { void loadHistory(); onChanged(); }} />
+                <TopUpButton ownerId={chef.ownerId} name={chef.fullName} onDone={() => { void loadHistory(); onChanged(); }} onToast={onToast} />
                 <button type="button" className={`${tinyButton} ms-1`} onClick={() => setOpenChef(chef)}>{t("admin.viewProfile")}</button>
                 <button type="button" className={`${tinyButton} ms-1`} onClick={() => setRemoveTarget({ kind: "chef", id: chef.id })}>{t("chef.delete")}</button>
               </td>
@@ -842,7 +867,7 @@ function HistoryDesk({
               <td className={cell}>{formatWhen(driver.createdAt)}</td>
               <td className={cell}>{formatMad(driver.balanceMad)}</td>
               <td className={`${cell} whitespace-nowrap`}>
-                <TopUpButton ownerId={driver.ownerId} name={driver.fullName} onDone={onChanged} />
+                <TopUpButton ownerId={driver.ownerId} name={driver.fullName} onDone={onChanged} onToast={onToast} />
                 <button type="button" className={`${tinyButton} ms-1`} onClick={() => setOpenDriver(driver)}>{t("admin.viewProfile")}</button>
                 <button type="button" className={`${tinyButton} ms-1`} onClick={() => setRemoveTarget({ kind: "driver", id: driver.id })}>{t("chef.delete")}</button>
               </td>
@@ -934,7 +959,7 @@ function CommissionEditor({ chefMad, driverMad, onSaved }: { chefMad: number; dr
   );
 }
 
-function TopUpButton({ ownerId, name, onDone }: { ownerId: string; name: string; onDone: () => void }) {
+function TopUpButton({ ownerId, name, onDone, onToast }: { ownerId: string; name: string; onDone: () => void; onToast: (message: string, tone?: "ok" | "warn") => void }) {
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const [amount, setAmount] = useState("50");
@@ -947,13 +972,14 @@ function TopUpButton({ ownerId, name, onDone }: { ownerId: string; name: string;
     setBusy(true);
     setError(null);
     try {
-      await readJson(await fetch("/api/admin/wallets", {
+      const body = await readJson<{ wallet: { balanceMad: number } }>(await fetch("/api/admin/wallets", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ownerId, amountMad: value }),
       }));
       setOpen(false);
       onDone();
+      onToast(t("admin.topUpDone", { balance: formatMad(body.wallet.balanceMad) }), "ok");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : t("admin.updateFailed"));
     } finally {

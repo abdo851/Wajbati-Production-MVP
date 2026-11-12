@@ -13,16 +13,16 @@ import { useLiveQuery } from "@/components/use-live-query";
 import { readCheckout, rememberReceipt, writeCheckout } from "@/lib/guest";
 
 export function MealBoard() {
-  const { data, error, loading, reload } = useLiveQuery<MealListResponse>("/api/meals");
+  const { data, error, loading, reconnecting, reload } = useLiveQuery<MealListResponse>("/api/meals");
   const { t, lang } = useI18n();
   const [selected, setSelected] = useState<PublicMeal | null>(null);
-  const meals = data?.meals ?? [];
+  const meals = (data?.meals ?? []).filter((meal) => meal.serviceDate === data?.serviceDate);
   const currentMeal = meals.find((meal) => meal.id === selected?.id) ?? selected;
   const portions = meals.reduce((sum, meal) => sum + meal.remainingQuantity, 0);
   const kitchens = new Set(meals.map((meal) => meal.kitchenName)).size;
 
   return (
-    <section id="meals" className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
+    <section id="meals" className="mx-auto max-w-6xl px-3 py-5 sm:px-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <div className="flex items-center gap-3">
@@ -45,11 +45,14 @@ export function MealBoard() {
           {error}
         </p>
       ) : null}
-      {loading && !data ? <p className="mt-8 text-base text-muted">{t("board.loading")}</p> : null}
+      {reconnecting && data ? <p className="mt-4 text-base text-muted">{t("live.reconnecting")}</p> : null}
+      {(loading || reconnecting) && !data ? (
+        <p className="mt-8 text-base text-muted">{reconnecting ? t("live.reconnecting") : t("board.loading")}</p>
+      ) : null}
       {data && meals.length === 0 ? (
         <p className="lift-card mt-8 rounded-3xl px-5 py-10 text-center text-base text-muted">{t("board.empty")}</p>
       ) : null}
-      <div className="mt-6 grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
+      <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4">
         {meals.map((meal) => (
           <MealCard
             key={meal.id}
@@ -76,41 +79,29 @@ export function MealBoard() {
 function MealCard({ meal, onOrder }: { meal: PublicMeal; onOrder: (meal: PublicMeal) => void }) {
   const { t, lang } = useI18n();
   const soldOut = meal.remainingQuantity <= 0;
-  const width = Math.max(0, Math.min(100, (meal.remainingQuantity / meal.maxQuantity) * 100));
 
   return (
-    <article className="lift-card flex flex-col overflow-hidden rounded-3xl">
-      {meal.photoUrl ? (
-        <div className="aspect-video w-full overflow-hidden">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={meal.photoUrl} alt="" className="h-full w-full rounded-lg object-cover" />
-        </div>
-      ) : null}
-      <div className="flex flex-1 flex-col p-5">
-      <div className="flex items-start justify-between gap-3">
-        <p className="text-sm font-medium text-terracotta">{meal.city}</p>
-        <p className="font-display text-3xl">{formatMad(meal.priceMad, lang)}</p>
+    <article className="flex flex-col overflow-hidden rounded-xl border border-[#E7E0D6] bg-card shadow-[0_1px_2px_rgba(30,26,21,0.06),0_10px_24px_-18px_rgba(30,26,21,0.45)]">
+      <div className="relative aspect-square w-full overflow-hidden bg-[#F3EBE1]">
+        {meal.photoUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={meal.photoUrl} alt="" className="h-full w-full object-cover" />
+        ) : (
+          <span className="flex h-full items-center justify-center text-3xl text-[#C4B6A6]" aria-hidden="true">🍽</span>
+        )}
       </div>
-      <h3 className="mt-3 font-display text-3xl leading-tight">{meal.title}</h3>
-      <p className="mt-3 flex-1 text-base leading-7 text-muted">{meal.description}</p>
-      <p className="mt-4 text-base">
-        {meal.kitchenName}
-        <span className="text-muted"> · {t("board.perPortion")}</span>
-      </p>
-      <div className="mt-4">
-        <div className="flex items-center justify-between text-sm">
-          <span>{t("board.left", { left: meal.remainingQuantity, max: meal.maxQuantity })}</span>
-          <span className={soldOut ? "text-terracotta-deep" : "text-olive"}>
-            {soldOut ? t("board.soldOut") : t("board.available")}
-          </span>
-        </div>
-        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-line" aria-hidden="true">
-          <div className="h-full rounded-full bg-olive" style={{ width: `${width}%` }} />
-        </div>
-      </div>
-      <button type="button" className={`${primaryButtonClass} mt-5`} disabled={soldOut} onClick={() => onOrder(meal)}>
-        {soldOut ? t("board.soldOut") : t("board.order")}
-      </button>
+      <div className="flex flex-1 flex-col gap-1 p-2.5">
+        <h3 className="line-clamp-2 min-h-10 text-sm font-medium leading-5 text-foreground">{meal.title}</h3>
+        <p className="truncate text-xs text-muted">{meal.kitchenName}</p>
+        <p className="text-sm font-semibold text-foreground">{formatMad(meal.priceMad, lang)}</p>
+        <button
+          type="button"
+          className="mt-auto inline-flex h-8 items-center justify-center rounded-full bg-[#D89B3D] px-3 text-xs font-semibold text-[#1E1A15] disabled:bg-[#E7E0D6] disabled:text-muted"
+          disabled={soldOut}
+          onClick={() => onOrder(meal)}
+        >
+          {soldOut ? t("board.soldOut") : t("board.add")}
+        </button>
       </div>
     </article>
   );

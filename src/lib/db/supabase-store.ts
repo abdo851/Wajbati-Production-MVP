@@ -4,7 +4,7 @@ import { DELIVERY_FEE_MAD, DRIVER_COMMISSION_MAD, PLATFORM_COMMISSION_MAD } from
 import { documentsAreReady, extensionFor, requiredDocumentKinds } from "@/lib/documents";
 import { financeOf, rowsOnDate, rowsThisWeek } from "@/lib/finance";
 import { StoreError } from "@/lib/errors";
-import { roundMoney, todayInCasablanca } from "@/lib/format";
+import { addCasablancaDays, roundMoney, todayInCasablanca } from "@/lib/format";
 import { assertTransition } from "@/lib/orders";
 import type {
   ActiveDelivery,
@@ -580,8 +580,9 @@ export function createSupabaseRepository(accessToken?: string) {
         .from("meals")
         .select("id, title, description, price_mad, max_quantity, remaining_quantity, service_date, is_published, chefs(kitchen_name, city)")
         .eq("chef_id", chefId)
-        .eq("service_date", serviceDate)
-        .order("created_at", { ascending: false });
+        .gte("service_date", addCasablancaDays(serviceDate, -3))
+        .lte("service_date", serviceDate)
+        .order("service_date", { ascending: false });
       if (mealsQuery.error) fail(mealsQuery.error, "Could not load your meals.");
       const ordersQuery = await authed
         .from("orders")

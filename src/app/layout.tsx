@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Fraunces, Noto_Naskh_Arabic, Outfit } from "next/font/google";
 import { LanguageProvider } from "@/components/language";
+import { AppToaster } from "@/components/toaster";
 import "./globals.css";
 
 const outfit = Outfit({
@@ -43,6 +44,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     >
       <body className="flex min-h-full flex-col">
         <LanguageProvider initial="ar">{children}</LanguageProvider>
+        <AppToaster />
       </body>
     </html>
   );

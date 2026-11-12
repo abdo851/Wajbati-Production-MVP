@@ -11,7 +11,7 @@ import { inputClass, LiveDot, primaryButtonClass, quietButtonClass, StatusPill }
 import { useI18n } from "@/components/language";
 import { useLiveQuery } from "@/components/use-live-query";
 import { useSession } from "@/components/use-session";
-import { formatMad, formatServiceDate, formatWhen } from "@/lib/format";
+import { addCasablancaDays, formatMad, formatServiceDate, formatWhen } from "@/lib/format";
 import { readJson } from "@/lib/read-json";
 import type { ChefBoard, ChefOrder, OrderStatus } from "@/lib/types";
 
@@ -136,7 +136,7 @@ function Kitchen({
   onLogout: () => Promise<void>;
 }) {
   const { t } = useI18n();
-  const { data, error, loading, reload } = useLiveQuery<ChefBoard>("/api/chef/board");
+  const { data, error, loading, reconnecting, reload } = useLiveQuery<ChefBoard>("/api/chef/board");
   const status = data?.approvalStatus ?? approval;
   const approved = status !== "pending" && status !== "rejected";
   const [notice, setNotice] = useState<string | null>(null);
@@ -351,43 +351,48 @@ function Kitchen({
               {error}
             </p>
           ) : null}
+          {reconnecting && data ? <p className="text-sm text-muted">{t("live.reconnecting")}</p> : null}
           <section>
             <h2 className="font-display text-2xl">{t("chef.onBoard")}</h2>
-            {loading && !data ? <p className="mt-3 text-sm text-muted">{t("chef.loading")}</p> : null}
-            <ul className="mt-3 space-y-3">
+            {(loading || reconnecting) && !data ? (
+              <p className="mt-3 text-sm text-muted">{reconnecting ? t("live.reconnecting") : t("chef.loading")}</p>
+            ) : null}
+            <ul className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4">
               {(data?.meals ?? []).map((meal) => (
-                <li key={meal.id} className="rounded-3xl border border-line bg-card px-4 py-3">
-                  {meal.photoUrl ? (
-                    <span className="mb-3 block aspect-video w-full overflow-hidden rounded-lg">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={meal.photoUrl} alt="" className="h-full w-full rounded-lg object-cover" />
+                <li key={meal.id} className="flex flex-col overflow-hidden rounded-xl border border-[#E7E0D6] bg-card shadow-[0_1px_2px_rgba(30,26,21,0.06),0_10px_24px_-18px_rgba(30,26,21,0.45)]">
+                  <div className="relative aspect-square w-full overflow-hidden bg-[#F3EBE1]">
+                    {meal.photoUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={meal.photoUrl} alt="" className="h-full w-full object-cover" />
+                    ) : (
+                      <span className="flex h-full items-center justify-center text-3xl text-[#C4B6A6]" aria-hidden="true">🍽</span>
+                    )}
+                    <span className="absolute start-2 top-2 rounded-full bg-white/95 px-2 py-0.5 text-[11px] font-medium shadow-sm">
+                      {mealDayLabel(meal.serviceDate, data?.serviceDate ?? "", t)}
                     </span>
-                  ) : null}
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <p className="font-medium">{meal.title}</p>
-                      <p className="mt-1 text-sm text-muted">
-                        {formatMad(meal.priceMad)} · {t("chef.portionsLeft", { left: meal.remainingQuantity, max: meal.maxQuantity })}
-                        {meal.isPublished ? "" : ` · ${t("chef.hidden")}`}
-                      </p>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      <button type="button" className={quietButtonClass} onClick={() => setEditing(editing === meal.id ? null : meal.id)}>
+                  </div>
+                  <div className="flex flex-1 flex-col gap-1 p-2.5">
+                    <p className="line-clamp-2 min-h-10 text-sm font-medium leading-5">{meal.title}</p>
+                    <p className="text-sm font-semibold">{formatMad(meal.priceMad)}</p>
+                    <p className="text-xs text-muted">
+                      {t("chef.portionsLeft", { left: meal.remainingQuantity, max: meal.maxQuantity })}
+                      {meal.isPublished ? "" : ` · ${t("chef.hidden")}`}
+                    </p>
+                    <div className="mt-auto flex gap-1 pt-1">
+                      <button type="button" className="h-8 flex-1 rounded-full border border-line text-xs font-medium" onClick={() => setEditing(editing === meal.id ? null : meal.id)}>
                         {t("chef.edit")}
                       </button>
-                      <button type="button" className={quietButtonClass} onClick={() => void removeMeal(meal.id)}>
+                      <button type="button" className="h-8 flex-1 rounded-full border border-line text-xs font-medium" onClick={() => void removeMeal(meal.id)}>
                         {t("chef.delete")}
                       </button>
                     </div>
                   </div>
                   {editing === meal.id ? (
-                    <form className="mt-3 grid gap-2" onSubmit={(event) => void saveMeal(event, meal.id)}>
+                    <form className="grid gap-2 border-t border-line p-2.5" onSubmit={(event) => void saveMeal(event, meal.id)}>
                       <input className={inputClass} name="title" defaultValue={meal.title} required minLength={3} maxLength={80} />
-                      <textarea className={`${inputClass} min-h-24`} name="description" defaultValue={meal.description} required minLength={10} maxLength={400} />
-                      <div className="grid grid-cols-2 gap-2">
-                        <input className={inputClass} name="priceMad" type="number" min={1} max={500} step="0.5" defaultValue={meal.priceMad} required />
-                        <input className={inputClass} name="maxQuantity" type="number" min={1} max={200} step={1} defaultValue={meal.maxQuantity} required />
-                      </div>
+                      <textarea className={`${inputClass} min-h-20`} name="description" defaultValue={meal.description} required minLength={10} maxLength={400} />
+                      <input className={inputClass} name="priceMad" type="number" min={1} max={500} step="0.5" defaultValue={meal.priceMad} required />
+                      <input className={inputClass} name="maxQuantity" type="number" min={1} max={200} step={1} defaultValue={meal.maxQuantity} required />
                       <button className={primaryButtonClass} type="submit">{t("chef.mealSaved")}</button>
                     </form>
                   ) : null}
@@ -395,7 +400,7 @@ function Kitchen({
               ))}
             </ul>
             {data && data.meals.length === 0 ? (
-              <p className="mt-3 text-sm text-muted">{t("chef.emptyToday")}</p>
+              <p className="mt-3 text-sm text-muted">{t("chef.recentEmpty")}</p>
             ) : null}
           </section>
           <OrderList orders={data?.orders ?? []} onChanged={() => void reload()} />
@@ -403,6 +408,12 @@ function Kitchen({
       </div>
     </main>
   );
+}
+
+function mealDayLabel(serviceDate: string, today: string, t: (key: "meal.today" | "meal.yesterday") => string) {
+  if (today && serviceDate === addCasablancaDays(today, -1)) return t("meal.yesterday");
+  if (!today || serviceDate === today) return t("meal.today");
+  return formatServiceDate(serviceDate);
 }
 
 function OrderList({ orders, onChanged }: { orders: ChefOrder[]; onChanged: () => void }) {

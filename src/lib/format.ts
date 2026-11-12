@@ -9,6 +9,21 @@ export function todayInCasablanca(date = new Date()): string {
   }).format(date);
 }
 
+export const MEAL_HISTORY_DAYS = 4;
+
+export function addCasablancaDays(isoDate: string, days: number): string {
+  const [year, month, day] = isoDate.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+export function serviceDateInHistory(serviceDate: string, now = new Date()): boolean {
+  const today = todayInCasablanca(now);
+  const start = addCasablancaDays(today, 1 - MEAL_HISTORY_DAYS);
+  return serviceDate >= start && serviceDate <= today;
+}
+
 const WEEKDAY_INDEX: Record<string, number> = { Mon: 0, Tue: 1, Wed: 2, Thu: 3, Fri: 4, Sat: 5, Sun: 6 };
 
 export function weekStartInCasablanca(date = new Date()): string {

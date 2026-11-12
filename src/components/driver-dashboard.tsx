@@ -83,7 +83,7 @@ function Route({
 }) {
   const { t } = useI18n();
   const [editingProfile, setEditingProfile] = useState(false);
-  const { data, error, reload } = useLiveQuery<DriverBoard>("/api/driver/board");
+  const { data, error, reconnecting, reload } = useLiveQuery<DriverBoard>("/api/driver/board");
   const [busy, setBusy] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
@@ -144,8 +144,11 @@ function Route({
       <WalletPanel />
       {data ? <Earnings board={data} /> : null}
       {error ? <p className="mt-4 text-sm text-terracotta-deep">{error}</p> : null}
+      {reconnecting && data ? <p className="mt-4 text-sm text-muted">{t("live.reconnecting")}</p> : null}
       {actionError ? <p className="mt-4 text-sm text-terracotta-deep">{actionError}</p> : null}
-      {!data && !error ? <p className="mt-8 text-sm text-muted">{t("driver.loading")}</p> : null}
+      {!data && !error ? (
+        <p className="mt-8 text-sm text-muted">{reconnecting ? t("live.reconnecting") : t("driver.loading")}</p>
+      ) : null}
 
       {data && data.accountStatus !== "approved" ? (
         <p className="mt-6 rounded-3xl border border-line bg-card p-4 text-sm leading-6">
