@@ -24,6 +24,7 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
+  themeColor: "#B85C3E",
 };
 
 export const metadata: Metadata = {
@@ -31,8 +32,21 @@ export const metadata: Metadata = {
     default: "Wajbati",
     template: "%s · Wajbati",
   },
-  description:
-    "Order today's home-cooked meals from independent kitchens. Portions are limited and update live.",
+  description: "أشهى الوجبات المنزلية تصلك إلى بابك",
+  manifest: "/manifest.json",
+  applicationName: "وجبتي",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "وجبتي",
+  },
+  icons: {
+    icon: "/favicon.ico",
+    apple: [{ url: "/icon-192.png", sizes: "192x192", type: "image/png" }],
+  },
+  other: {
+    "apple-mobile-web-app-capable": "yes",
+  },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
@@ -42,7 +56,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       dir="rtl"
       className={`${outfit.variable} ${fraunces.variable} ${naskh.variable} h-full antialiased`}
     >
-      <body className="flex min-h-full flex-col">
+      <body className="flex min-h-dvh min-h-screen flex-col pt-safe pr-safe pb-safe pl-safe">
         <LanguageProvider initial="ar">{children}</LanguageProvider>
         <AppToaster />
       </body>
