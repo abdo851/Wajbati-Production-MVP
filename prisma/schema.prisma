@@ -1,0 +1,205 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  CUSTOMER
+  CHEF
+  DRIVER
+  ADMIN
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum OrderStatus {
+  PENDING
+  PREPARING
+  READY
+  ACCEPTED
+  DELIVERED
+  CANCELLED
+}
+
+enum WalletTxnType {
+  TOPUP
+  COMMISSION
+}
+
+model User {
+  id                    String         @id
+  email                 String         @unique
+  phone                 String?        @unique
+  password              String
+  fullName              String         @default("")
+  role                  Role
+  walletBalance         Float          @default(0) @map("wallet_balance")
+  approvalStatus        ApprovalStatus @default(PENDING) @map("approval_status")
+  emailConfirmed        Boolean        @default(false) @map("email_confirmed")
+  signatureUrl          String?        @map("signature_url") @db.Text
+  googleSub             String?        @unique
+  confirmationToken     String?
+  confirmationExpiresAt DateTime?
+  avatarDataUrl         String?        @db.Text
+  isActive              Boolean        @default(true)
+  createdAt             DateTime       @default(now()) @map("created_at")
+
+  chefProfile      ChefProfile?
+  driverProfile    DriverProfile?
+  transactions     WalletTransaction[]
+  sentMessages     Message[]           @relation("SentMessages")
+  receivedMessages Message[]           @relation("ReceivedMessages")
+}
+
+model ChefProfile {
+  id                     String    @id
+  userId                 String    @unique
+  user                   User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bio                    String?   @db.Text
+  city                   String?
+  avatarUrl              String?   @map("avatar_url") @db.Text
+  kitchenName            String    @default("")
+  cinStoragePath         String?
+  autoEntrepreneurNumber String?
+  foodSafetyAcceptedAt   DateTime?
+  kitchenPhotoDataUrl    String?   @db.Text
+  postponedAt            DateTime?
+  isActive               Boolean   @default(true)
+  createdAt              DateTime  @default(now()) @map("created_at")
+}
+
+model DriverProfile {
+  id                  String    @id
+  userId              String    @unique
+  user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  vehicleType         String    @map("vehicle_type")
+  licenseUrl          String?   @map("license_url") @db.Text
+  city                String?
+  notes               String?   @db.Text
+  vehiclePhotoDataUrl String?   @db.Text
+  postponedAt         DateTime?
+  isActive            Boolean   @default(true)
+  createdAt           DateTime  @default(now()) @map("created_at")
+}
+
+model Meal {
+  id                String   @id
+  chefId            String
+  title             String
+  description       String       @db.Text
+  price             Float
+  quantity          Int
+  remainingQuantity Int          @map("remaining_quantity")
+  isPublished       Boolean      @map("is_published")
+  serviceDate       DateTime     @map("service_date") @db.Date
+  imageUrl          String?      @map("image_url")
+  createdAt         DateTime     @default(now()) @map("created_at")
+  orders            Order[]
+}
+
+model Order {
+  id                   String      @id
+  customerId           String?
+  driverId             String?
+  mealId               String
+  meal                 Meal        @relation(fields: [mealId], references: [id], onDelete: Restrict)
+  chefId               String
+  quantity             Int
+  status               OrderStatus
+  flowStatus           String
+  otpCode              String      @map("otp_code")
+  address              String
+  notes                String?
+  totalPrice           Float       @map("total_price")
+  customerName         String
+  customerPhone        String
+  unitPriceMad         Float
+  commissionPerMealMad Float
+  commissionMad        Float
+  deliveryFeeMad       Float
+  driverCommissionMad  Float
+  customerEmail        String?
+  paymentMethod        String
+  paymentStatus        String
+  trackToken           String      @unique
+  createdAt            DateTime    @default(now()) @map("created_at")
+
+  @@index([customerPhone])
+  @@index([chefId])
+}
+
+model WalletTransaction {
+  id          String        @id
+  userId      String
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  amount      Float
+  type        WalletTxnType
+  note        String
+  referenceId String?       @map("reference_id")
+  createdAt   DateTime      @default(now()) @map("created_at")
+
+  @@index([userId])
+}
+
+model Message {
+  id         String   @id
+  senderId   String
+  sender     User     @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
+  receiverId String
+  receiver   User     @relation("ReceivedMessages", fields: [receiverId], references: [id], onDelete: Cascade)
+  content    String   @db.Text
+  createdAt  DateTime @default(now()) @map("created_at")
+  threadId   String
+  mealId     String?
+  orderId    String?
+  customerId String?
+  senderRole String
+  senderName String
+
+  @@index([threadId])
+}
+
+model SupportMessage {
+  id              String   @id
+  threadId        String
+  participantRole String
+  participantName String
+  sender          String
+  body            String   @db.Text
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@index([threadId])
+}
+
+model StoredFile {
+  id          String   @id
+  ownerId     String
+  ownerKind   String
+  kind        String
+  contentType String
+  storagePath String
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([ownerId, ownerKind])
+}
+
+model EmailCapture {
+  id        String   @id @default(cuid())
+  email     String
+  source    String
+  createdAt DateTime @default(now()) @map("created_at")
+}
+
+model PlatformSetting {
+  id                  String @id @default("default")
+  chefCommissionMad   Float  @default(1)
+  driverCommissionMad Float  @default(1)
+}

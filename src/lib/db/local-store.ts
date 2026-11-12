@@ -1,5 +1,6 @@
-import { mkdir, readFile, rename, rm, writeFile } from "fs/promises";
+import { readFile } from "fs/promises";
 import path from "path";
+import { loadGraph, saveGraph } from "@/lib/db/prisma-io";
 import { randomBytes, randomUUID, scryptSync, timingSafeEqual } from "crypto";
 import { codesMatch, newDeliveryCode, newTrackToken } from "@/lib/delivery-code";
 import { financeOf, rowsOnDate, rowsThisWeek } from "@/lib/finance";
@@ -203,7 +204,7 @@ type WalletTxn = {
   createdAt: string;
 };
 
-type Database = {
+export type Database = {
   profiles: Profile[];
   chefs: Chef[];
   meals: Meal[];
@@ -229,7 +230,6 @@ type Wallet = {
 };
 
 const filePath = path.join(process.cwd(), "data", "store.json");
-let volatile: Database | null = null;
 
 let queue: Promise<unknown> = Promise.resolve();
 
@@ -658,36 +658,27 @@ function normalize(db: Database): boolean {
 }
 
 async function readDb(): Promise<{ db: Database; created: boolean; migrated: boolean }> {
-  if (volatile) return { db: volatile, created: false, migrated: false };
+  let existing: Database | null = null;
+  try {
+    existing = await loadGraph();
+  } catch {
+    throw new StoreError("The order book could not be read.", 500);
+  }
+  if (existing) return { db: existing, created: false, migrated: normalize(existing) };
   try {
     const raw = await readFile(filePath, "utf8");
     const db = JSON.parse(raw) as Database;
-    return { db, created: false, migrated: normalize(db) };
+    return { db, created: true, migrated: normalize(db) };
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") {
       return { db: seed(), created: true, migrated: false };
     }
-    throw new StoreError("The local order book could not be read.", 500);
+    throw new StoreError("The order book could not be read.", 500);
   }
-}
-
-function diskRejected(error: unknown): boolean {
-  const code = (error as NodeJS.ErrnoException).code;
-  return code === "EROFS" || code === "EPERM" || code === "EACCES" || code === "ENOTSUP";
 }
 
 async function writeDb(db: Database) {
-  try {
-    await mkdir(path.dirname(filePath), { recursive: true });
-    const tmp = `${filePath}.tmp`;
-    await writeFile(tmp, JSON.stringify(db, null, 2), "utf8");
-    await rm(filePath, { force: true });
-    await rename(tmp, filePath);
-    volatile = null;
-  } catch (error) {
-    if (!diskRejected(error)) throw error;
-    volatile = db;
-  }
+  await saveGraph(db);
 }
 
 async function withDb<T>(fn: (db: Database) => T | Promise<T>, persist: boolean): Promise<T> {

@@ -55,3 +55,5 @@ data/private-docs/
 .env.local
 tsconfig.tsbuildinfo
 !data/private-docs/.gitkeep
+
+/src/generated/prisma
