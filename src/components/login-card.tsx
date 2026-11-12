@@ -3,6 +3,7 @@
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { PasswordField } from "@/components/password-field";
+import { RegistrationSuccess } from "@/components/registration-success";
 import { SignatureCapture } from "@/components/signature-pad";
 import { useI18n } from "@/components/language";
 import { inputClass, primaryButtonClass } from "@/components/ui";
@@ -38,7 +39,6 @@ export function LoginCard({
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [registered, setRegistered] = useState(false);
-  const [doneUrl, setDoneUrl] = useState<string | null>(null);
   const admin = desk === "admin";
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -68,9 +68,8 @@ export function LoginCard({
         if (cinFront) form.set("cinFront", cinFront);
         if (signature) form.set("signature", signature);
         const response = await fetch("/api/auth/chef/register", { method: "POST", body: form });
-        const body = await readJson<{ dev_confirmation_url?: string }>(response);
+        await readJson(response);
         setRegistered(true);
-        setDoneUrl(body.dev_confirmation_url ?? null);
         return;
       }
       const response = await fetch("/api/auth/login", {
@@ -86,24 +85,22 @@ export function LoginCard({
       }
     } catch (caught) {
       const message = caught instanceof Error ? caught.message : t("login.failed");
-      setError(localizeKnownError(lang, message));
+      const localized = localizeKnownError(lang, message);
+      setError(localized);
+      if (
+        !admin &&
+        mode === "register" &&
+        [t("err.emailTaken"), t("err.phoneTaken"), t("err.email"), t("err.phone"), t("err.passwordMatch"), t("err.passwordLength")].includes(localized)
+      ) {
+        setStep("account");
+      }
     } finally {
       setPending(false);
     }
   }
 
   if (registered) {
-    return (
-      <main className="mx-auto flex w-full max-w-md flex-1 flex-col px-4 py-12 sm:px-6">
-        <h1 className="font-display text-4xl">{t("auth.registered")}</h1>
-        <p className="mt-4 text-base leading-8">{t("chef.pendingNotice")}</p>
-        {doneUrl ? (
-          <a className="mt-4 text-base font-medium text-terracotta-deep underline" href={doneUrl}>
-            {t("auth.devLink")}
-          </a>
-        ) : null}
-      </main>
-    );
+    return <RegistrationSuccess />;
   }
 
   return (
@@ -126,15 +123,15 @@ export function LoginCard({
         </div>
       )}
       <form onSubmit={submit} className="lift-card mt-4 space-y-4 rounded-3xl border border-line bg-card p-5">
-        {!admin && mode === "register" && step === "account" ? (
-          <>
+        {!admin && mode === "register" ? (
+          <div className={step === "account" ? "space-y-4" : "hidden"}>
             <label className="block text-base">
               <span className="mb-1.5 block font-medium">{t("order.name")}</span>
-              <input className={inputClass} value={fullName} onChange={(event) => setFullName(event.target.value)} required />
+              <input className={inputClass} value={fullName} onChange={(event) => setFullName(event.target.value)} required={step === "account"} />
             </label>
             <label className="block text-base">
               <span className="mb-1.5 block font-medium">{t("chef.kitchen")}</span>
-              <input className={inputClass} value={kitchenName} onChange={(event) => setKitchenName(event.target.value)} required />
+              <input className={inputClass} value={kitchenName} onChange={(event) => setKitchenName(event.target.value)} required={step === "account"} />
             </label>
             <label className="block text-base">
               <span className="mb-1.5 block font-medium">{t("chef.city")}</span>
@@ -146,47 +143,43 @@ export function LoginCard({
             </label>
             <label className="block text-base">
               <span className="mb-1.5 block font-medium">{t("auth.phone")}</span>
-              <input className={inputClass} value={phone} onChange={(event) => setPhone(event.target.value)} required />
+              <input className={inputClass} value={phone} onChange={(event) => setPhone(event.target.value)} required={step === "account"} />
             </label>
-          </>
-        ) : null}
-        {admin || mode === "login" || step === "account" ? (
+            <label className="block text-base">
+              <span className="mb-1.5 block font-medium">{t("auth.email")}</span>
+              <input className={inputClass} type="email" value={email} onChange={(event) => setEmail(event.target.value)} required={step === "account"} />
+            </label>
+            <PasswordField label={t("auth.password")} value={password} onChange={setPassword} autoComplete="new-password" />
+            <PasswordField label={t("auth.confirm")} value={passwordConfirm} onChange={setPasswordConfirm} autoComplete="new-password" />
+          </div>
+        ) : (
           <>
-            {admin || mode === "login" ? (
-              <label className="block text-base">
-                <span className="mb-1.5 block font-medium">{t("auth.email")}</span>
-                <input className={inputClass} type="email" autoComplete="username" value={email} onChange={(event) => setEmail(event.target.value)} required />
-              </label>
-            ) : (
-              <label className="block text-base">
-                <span className="mb-1.5 block font-medium">{t("auth.email")}</span>
-                <input className={inputClass} type="email" value={email} onChange={(event) => setEmail(event.target.value)} required />
-              </label>
-            )}
-            <PasswordField label={t("auth.password")} value={password} onChange={setPassword} autoComplete={mode === "login" || admin ? "current-password" : "new-password"} />
-            {!admin && mode === "register" ? (
-              <PasswordField label={t("auth.confirm")} value={passwordConfirm} onChange={setPasswordConfirm} autoComplete="new-password" />
-            ) : null}
+            <label className="block text-base">
+              <span className="mb-1.5 block font-medium">{t("auth.email")}</span>
+              <input className={inputClass} type="email" autoComplete="username" value={email} onChange={(event) => setEmail(event.target.value)} required />
+            </label>
+            <PasswordField label={t("auth.password")} value={password} onChange={setPassword} autoComplete="current-password" />
           </>
-        ) : null}
-        {!admin && mode === "register" && step === "safety" ? (
-          <>
+        )}
+        {!admin && mode === "register" ? (
+          <div className={step === "safety" ? "space-y-4" : "hidden"}>
             <label className="flex items-start gap-3 text-base">
-              <input type="checkbox" className="mt-1" checked={foodSafety} onChange={(event) => setFoodSafety(event.target.checked)} required />
+              <input type="checkbox" className="mt-1" checked={foodSafety} onChange={(event) => setFoodSafety(event.target.checked)} required={step === "safety"} />
               <span>{t("chef.pledge")}</span>
             </label>
             <label className="block text-base">
               <span className="mb-1.5 block font-medium">{t("driver.docs.cinFront")}</span>
-              <input className={inputClass} type="file" accept="image/jpeg,image/png,image/webp" required onChange={(event) => setCinFront(event.target.files?.[0] ?? null)} />
+              <input className={inputClass} type="file" accept="image/jpeg,image/png,image/webp" required={step === "safety" && !cinFront} onChange={(event) => setCinFront(event.target.files?.[0] ?? cinFront)} />
+              {cinFront ? <span className="mt-1 block text-sm text-muted">{cinFront.name}</span> : null}
             </label>
             <label className="block text-base">
               <span className="mb-1.5 block font-medium">{t("chef.autoNumber")}</span>
               <input className={inputClass} value={autoNumber} onChange={(event) => setAutoNumber(event.target.value)} />
             </label>
             <SignatureCapture label={t("chef.signature")} onChange={setSignature} />
-          </>
+          </div>
         ) : null}
-        {error ? <p role="alert" className="text-sm text-terracotta-deep">{error}</p> : null}
+        {error ? <p role="alert" className="text-base font-medium text-terracotta-deep">{error}</p> : null}
         <button className={`${primaryButtonClass} w-full`} type="submit" disabled={pending}>
           {pending ? t("auth.checking") : !admin && mode === "register" && step === "account" ? t("chef.continue") : !admin && mode === "register" ? t("auth.createAccount") : t("auth.signIn")}
         </button>

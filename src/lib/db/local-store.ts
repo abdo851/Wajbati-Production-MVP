@@ -1099,6 +1099,13 @@ export async function authenticateLocal(email: string, password: string): Promis
     const profile = db.profiles.find((item) => item.email === email);
     const ok = verifyPassword(password, profile?.passwordHash ?? DUMMY_HASH);
     if (!profile || !ok) return null;
+    if (profile.role === "chef") {
+      const kitchen = db.chefs.find((item) => item.profileId === profile.id && item.isActive) ?? db.chefs.find((item) => item.profileId === profile.id);
+      if (kitchen?.approvalStatus === "approved") return mapUser(db, profile);
+      if (kitchen?.approvalStatus === "pending" || kitchen?.approvalStatus === "rejected") {
+        throw new StoreError("Your account is under review. You cannot publish meals until approved.", 403);
+      }
+    }
     if (profile.emailConfirmed === false && profile.role !== "chef") {
       throw new StoreError("Please confirm your email first.", 403);
     }
@@ -1120,10 +1127,8 @@ export async function authenticateLocalDriver(identifier: string, password: stri
     const driver = db.drivers.find((item) => item.phone === identifier || item.email === identifier);
     const ok = verifyPassword(password, driver?.passwordHash ?? DUMMY_HASH);
     if (!driver || !ok) return null;
-    if (driver.emailConfirmed === false) {
-      throw new StoreError("Please confirm your email first.", 403);
-    }
-    return mapDriver(db, driver);
+    if (driver.status === "approved") return mapDriver(db, driver);
+    throw new StoreError("Your application is still waiting for approval.", 403);
   }, false);
 }
 
@@ -1738,6 +1743,9 @@ export const localRepository = {
         driver.status = "approved";
         driver.isActive = true;
         driver.postponedAt = null;
+        driver.emailConfirmed = true;
+        driver.confirmationToken = null;
+        driver.confirmationExpiresAt = null;
       }
       return toDriverRecord(db, driver);
     }, true);

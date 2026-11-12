@@ -70,6 +70,12 @@ export async function login(email: string, password: string, desk: "chef" | "adm
   if (desk === "chef" && !result.user.chefId) {
     throw new StoreError("This chef account is not linked to a kitchen yet.", 403);
   }
+  if (desk === "chef") {
+    const approval = result.user.approvalStatus ?? result.user.chefApprovalStatus;
+    if (approval === "pending" || approval === "rejected") {
+      throw new StoreError("Your account is under review. You cannot publish meals until approved.", 403);
+    }
+  }
   return { user: result.user, token: seal(result.user.id, result.accessToken) };
 }
 
@@ -81,6 +87,9 @@ export async function loginDriver(identifier: string, password: string): Promise
   if (!result) throw new StoreError("Those credentials were not recognized.", 401);
   if (result.user.role !== "driver" || !result.user.driverId) {
     throw new StoreError(deskMessage(result.user.role), 403);
+  }
+  if (result.user.driverStatus && result.user.driverStatus !== "approved") {
+    throw new StoreError("Your application is still waiting for approval.", 403);
   }
   return { user: result.user, token: seal(result.user.id, result.accessToken) };
 }
