@@ -3,7 +3,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { DELIVERY_FEE_MAD } from "@/lib/constants";
-import { formatMad, formatServiceDate, formatWhen } from "@/lib/format";
+import { addCasablancaDays, formatMad, formatServiceDate, formatWhen } from "@/lib/format";
 import { readJson } from "@/lib/read-json";
 import type { MealListResponse, OrderReceipt, PublicMeal } from "@/lib/types";
 import { SecureChat } from "@/components/secure-chat";
@@ -13,10 +13,18 @@ import { useLiveQuery } from "@/components/use-live-query";
 import { readCheckout, rememberReceipt, writeCheckout } from "@/lib/guest";
 
 export function MealBoard() {
-  const { data, error, loading, reconnecting, reload } = useLiveQuery<MealListResponse>("/api/meals");
+  const { data, error, loading, reload } = useLiveQuery<MealListResponse>("/api/meals");
   const { t, lang } = useI18n();
   const [selected, setSelected] = useState<PublicMeal | null>(null);
-  const meals = (data?.meals ?? []).filter((meal) => meal.serviceDate === data?.serviceDate);
+  const [range, setRange] = useState<"today" | "yesterday" | "recent">("today");
+  const today = data?.serviceDate ?? "";
+  const meals = (data?.meals ?? []).filter((meal) => {
+    if (!today) return false;
+    if (range === "today") return meal.serviceDate === today;
+    if (range === "yesterday") return meal.serviceDate === addCasablancaDays(today, -1);
+    return meal.serviceDate >= addCasablancaDays(today, -3) && meal.serviceDate <= today;
+  });
+  const canOrder = range === "today";
   const currentMeal = meals.find((meal) => meal.id === selected?.id) ?? selected;
   const portions = meals.reduce((sum, meal) => sum + meal.remainingQuantity, 0);
   const kitchens = new Set(meals.map((meal) => meal.kitchenName)).size;
@@ -36,20 +44,37 @@ export function MealBoard() {
                   kitchens,
                   portions,
                 })
-              : t("board.loadingDate")}
+              : loading
+                ? t("board.loadingDate")
+                : error
+                  ? t("live.failed")
+                  : t("board.empty")}
           </p>
         </div>
+      </div>
+      <div className="mt-4 flex flex-wrap gap-2">
+        {([
+          ["today", t("meal.today")],
+          ["yesterday", t("meal.yesterday")],
+          ["recent", t("board.lastDays")],
+        ] as const).map(([id, label]) => (
+          <button
+            key={id}
+            type="button"
+            className={`min-h-10 rounded-full px-4 text-sm font-medium ${range === id ? "bg-terracotta text-white" : "border border-line bg-card"}`}
+            onClick={() => setRange(id)}
+          >
+            {label}
+          </button>
+        ))}
       </div>
       {error ? (
         <p role="alert" className="mt-4 text-base text-terracotta-deep">
           {error}
         </p>
       ) : null}
-      {reconnecting && data ? <p className="mt-4 text-base text-muted">{t("live.reconnecting")}</p> : null}
-      {(loading || reconnecting) && !data ? (
-        <p className="mt-8 text-base text-muted">{reconnecting ? t("live.reconnecting") : t("board.loading")}</p>
-      ) : null}
-      {data && meals.length === 0 ? (
+      {loading && !data ? <p className="mt-8 text-base text-muted">{t("board.loading")}</p> : null}
+      {!loading && !error && meals.length === 0 ? (
         <p className="lift-card mt-8 rounded-3xl px-5 py-10 text-center text-base text-muted">{t("board.empty")}</p>
       ) : null}
       <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4">
@@ -57,8 +82,9 @@ export function MealBoard() {
           <MealCard
             key={meal.id}
             meal={meal}
+            canOrder={canOrder}
             onOrder={(next) => {
-              if (window.localStorage.getItem("wajbati_terms_accepted") !== "true") return;
+              if (!canOrder || window.localStorage.getItem("wajbati_terms_accepted") !== "true") return;
               setSelected(next);
             }}
           />
@@ -76,19 +102,28 @@ export function MealBoard() {
   );
 }
 
-function MealCard({ meal, onOrder }: { meal: PublicMeal; onOrder: (meal: PublicMeal) => void }) {
+function MealCard({ meal, canOrder, onOrder }: { meal: PublicMeal; canOrder: boolean; onOrder: (meal: PublicMeal) => void }) {
   const { t, lang } = useI18n();
   const soldOut = meal.remainingQuantity <= 0;
+  const photos = meal.photoUrls?.length ? meal.photoUrls : meal.photoUrl ? [meal.photoUrl] : [];
+  const [index, setIndex] = useState(0);
+  const photo = photos[index] ?? null;
 
   return (
     <article className="flex flex-col overflow-hidden rounded-xl border border-[#E7E0D6] bg-card shadow-[0_1px_2px_rgba(30,26,21,0.06),0_10px_24px_-18px_rgba(30,26,21,0.45)]">
       <div className="relative aspect-square w-full overflow-hidden bg-[#F3EBE1]">
-        {meal.photoUrl ? (
+        {photo ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={meal.photoUrl} alt="" className="h-full w-full object-cover" />
+          <img src={photo} alt="" className="h-full w-full object-cover" />
         ) : (
           <span className="flex h-full items-center justify-center text-3xl text-[#C4B6A6]" aria-hidden="true">🍽</span>
         )}
+        {photos.length > 1 ? (
+          <span className="absolute inset-x-2 bottom-2 flex justify-between">
+            <button type="button" className="size-7 rounded-full bg-white/90 text-sm" onClick={() => setIndex((current) => (current - 1 + photos.length) % photos.length)} aria-label={t("board.lastDays")}>‹</button>
+            <button type="button" className="size-7 rounded-full bg-white/90 text-sm" onClick={() => setIndex((current) => (current + 1) % photos.length)} aria-label={t("board.lastDays")}>›</button>
+          </span>
+        ) : null}
       </div>
       <div className="flex flex-1 flex-col gap-1 p-2.5">
         <h3 className="line-clamp-2 min-h-10 text-sm font-medium leading-5 text-foreground">{meal.title}</h3>
@@ -97,11 +132,12 @@ function MealCard({ meal, onOrder }: { meal: PublicMeal; onOrder: (meal: PublicM
         <button
           type="button"
           className="mt-auto inline-flex h-8 items-center justify-center rounded-full bg-[#D89B3D] px-3 text-xs font-semibold text-[#1E1A15] disabled:bg-[#E7E0D6] disabled:text-muted"
-          disabled={soldOut}
+          disabled={soldOut || !canOrder}
           onClick={() => onOrder(meal)}
         >
           {soldOut ? t("board.soldOut") : t("board.add")}
         </button>
+        {!canOrder ? <p className="text-[11px] leading-4 text-terracotta-deep">{t("meal.pastOrder")}</p> : null}
       </div>
     </article>
   );

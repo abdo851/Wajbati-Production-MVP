@@ -175,6 +175,7 @@ async function writeGraph(tx: Writer, db: Database) {
       confirmationExpiresAt: asTime(profile.confirmationExpiresAt),
       avatarDataUrl: profile.avatarDataUrl,
       isActive: profile.isActive,
+      isDeleted: profile.isDeleted === true,
       createdAt: new Date(),
     });
   }
@@ -199,6 +200,7 @@ async function writeGraph(tx: Writer, db: Database) {
       confirmationExpiresAt: asTime(driver.confirmationExpiresAt),
       avatarDataUrl: driver.avatarDataUrl,
       isActive: driver.isActive,
+      isDeleted: driver.isDeleted === true,
       createdAt: asTime(driver.createdAt) ?? new Date(),
     });
   }
@@ -220,6 +222,7 @@ async function writeGraph(tx: Writer, db: Database) {
       autoEntrepreneurNumber: chef.autoEntrepreneurNumber,
       foodSafetyAcceptedAt: asTime(chef.foodSafetyAcceptedAt),
       kitchenPhotoDataUrl: chef.kitchenPhotoDataUrl,
+      gallery: chef.gallery ?? [],
       postponedAt: asTime(chef.postponedAt),
       isActive: chef.isActive,
       createdAt: asTime(chef.createdAt) ?? new Date(),
@@ -236,6 +239,7 @@ async function writeGraph(tx: Writer, db: Database) {
       city: driver.city,
       notes: driver.notes,
       vehiclePhotoDataUrl: driver.vehiclePhotoDataUrl,
+      gallery: driver.gallery ?? [],
       postponedAt: asTime(driver.postponedAt),
       isActive: driver.isActive,
       createdAt: asTime(driver.createdAt) ?? new Date(),
@@ -258,6 +262,9 @@ async function writeGraph(tx: Writer, db: Database) {
     isPublished: meal.isPublished,
     serviceDate: dayStamp(meal.serviceDate),
     imageUrl: meal.photoPath,
+    images: meal.photoPaths?.length ? meal.photoPaths : meal.photoPath ? [meal.photoPath] : [],
+    isDeleted: meal.isDeleted === true,
+    isActive: meal.isActive !== false,
     createdAt: asTime(meal.createdAt) ?? new Date(),
   }));
   const mealIds = new Set(meals.map((meal) => meal.id));
@@ -288,6 +295,8 @@ async function writeGraph(tx: Writer, db: Database) {
       paymentMethod: order.paymentMethod,
       paymentStatus: order.paymentStatus,
       trackToken: order.trackToken,
+      isDeleted: order.isDeleted === true,
+      isActive: order.isActive !== false,
       createdAt: asTime(order.createdAt) ?? new Date(),
     }));
 
@@ -421,6 +430,7 @@ export async function loadGraph(): Promise<Database | null> {
       confirmationExpiresAt: iso(user.confirmationExpiresAt),
       avatarDataUrl: user.avatarDataUrl,
       isActive: user.isActive,
+      isDeleted: user.isDeleted,
     }));
   const chefRows: Database["chefs"] = chefs.flatMap((chef) => {
     const user = usersById.get(chef.userId);
@@ -439,6 +449,7 @@ export async function loadGraph(): Promise<Database | null> {
         foodSafetyAcceptedAt: iso(chef.foodSafetyAcceptedAt),
         signatureDataUrl: user.signatureUrl,
         kitchenPhotoDataUrl: chef.kitchenPhotoDataUrl,
+        gallery: chef.gallery ?? [],
         postponedAt: iso(chef.postponedAt),
         createdAt: (iso(chef.createdAt) ?? new Date(0).toISOString()),
       },
@@ -468,7 +479,9 @@ export async function loadGraph(): Promise<Database | null> {
         avatarDataUrl: user.avatarDataUrl,
         vehiclePhotoDataUrl: driver?.vehiclePhotoDataUrl ?? null,
         licensePhotoDataUrl: driver?.licenseUrl ?? null,
+        gallery: driver?.gallery ?? [],
         isActive: driver?.isActive ?? user.isActive,
+        isDeleted: user.isDeleted,
         postponedAt: iso(driver?.postponedAt ?? null),
       };
     });
@@ -497,6 +510,9 @@ export async function loadGraph(): Promise<Database | null> {
       isPublished: meal.isPublished,
       createdAt: meal.createdAt.toISOString(),
       photoPath: meal.imageUrl,
+      photoPaths: meal.images?.length ? meal.images : meal.imageUrl ? [meal.imageUrl] : [],
+      isDeleted: meal.isDeleted,
+      isActive: meal.isActive,
     })),
     orders: orders.map((order) => ({
       id: order.id,
@@ -520,6 +536,8 @@ export async function loadGraph(): Promise<Database | null> {
       deliveryCode: order.otpCode,
       trackToken: order.trackToken,
       status: flowOf(order.flowStatus, order.status),
+      isDeleted: order.isDeleted,
+      isActive: order.isActive,
       createdAt: order.createdAt.toISOString(),
     })),
     drivers: driverRows,

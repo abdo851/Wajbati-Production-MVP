@@ -5,6 +5,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { DocumentUpload } from "@/components/document-upload";
 import { ProfileExtras } from "@/components/profile-extras";
 import { DriverAuth } from "@/components/driver-auth";
+import { PhotoGallery, PenButton } from "@/components/photo-gallery";
 import { ProfilePhoto } from "@/components/site-header";
 import { SecureChat } from "@/components/secure-chat";
 import { WalletPanel } from "@/components/wallet-panel";
@@ -60,6 +61,7 @@ export function DriverDashboard() {
       city={session.user.city ?? ""}
       bio={session.user.bio ?? ""}
       avatar={session.user.avatarDataUrl ?? null}
+      gallery={session.user.gallery ?? []}
       onLogout={reload}
       onProfileSaved={reload}
     />
@@ -71,6 +73,7 @@ function Route({
   city,
   bio,
   avatar,
+  gallery,
   onLogout,
   onProfileSaved,
 }: {
@@ -78,11 +81,13 @@ function Route({
   city: string;
   bio: string;
   avatar: string | null;
+  gallery: string[];
   onLogout: () => Promise<void>;
   onProfileSaved: () => Promise<void>;
 }) {
   const { t } = useI18n();
   const [editingProfile, setEditingProfile] = useState(false);
+  const [album, setAlbum] = useState(gallery);
   const { data, error, reconnecting, reload } = useLiveQuery<DriverBoard>("/api/driver/board");
   const [busy, setBusy] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -127,7 +132,10 @@ function Route({
 
       <section className="mt-6 rounded-3xl border border-line bg-card p-5 shadow-[0_8px_30px_rgba(30,26,21,0.08)]">
         <div className="flex flex-wrap items-center gap-5">
-          <ProfilePhoto src={avatar} label={name} className="size-32" />
+          <div className="relative">
+            <ProfilePhoto src={avatar} label={name} className="size-32" />
+            <PenButton label={t("profile.edit")} onClick={() => setEditingProfile((open) => !open)} />
+          </div>
           <div className="min-w-0 flex-1">
             <h2 className="font-display text-4xl leading-tight">{name}</h2>
             <button type="button" className={`${quietButtonClass} mt-4`} onClick={() => setEditingProfile((open) => !open)}>
@@ -137,6 +145,7 @@ function Route({
         </div>
         <p className="mt-6 text-sm font-medium text-muted">{t("profile.bio")}</p>
         <p className="mt-1 text-base leading-7">{bio || "—"}</p>
+        <PhotoGallery images={album} onChange={setAlbum} />
         <p className="mt-3 text-sm font-medium text-muted">{t("chef.city")}</p>
         <p className="mt-1 text-base text-terracotta">{city || "—"}</p>
         {editingProfile ? <ProfileExtras role="driver" onSaved={onProfileSaved} /> : null}
@@ -159,7 +168,7 @@ function Route({
       ) : null}
 
       {data && data.accountStatus === "approved" ? (
-        <section className="mt-8">
+        <section id="orders" className="mt-8">
           <h2 className="font-display text-2xl">{t("driver.ready", { city: data.city })}</h2>
           {data.available.length === 0 ? (
             <p className="mt-3 text-sm text-muted">{t("driver.noneWaiting")}</p>

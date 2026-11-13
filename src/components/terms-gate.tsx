@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useI18n } from "@/components/language";
 import { primaryButtonClass } from "@/components/ui";
@@ -18,18 +18,12 @@ function hasAgreed() {
 export function TermsGate() {
   const { t } = useI18n();
   const [open, setOpen] = useState(true);
+  const checked = useRef(false);
 
   useEffect(() => {
-    function sync() {
-      setOpen(!hasAgreed());
-    }
-    sync();
-    window.addEventListener("pageshow", sync);
-    window.addEventListener("focus", sync);
-    return () => {
-      window.removeEventListener("pageshow", sync);
-      window.removeEventListener("focus", sync);
-    };
+    if (checked.current) return;
+    checked.current = true;
+    setOpen(!hasAgreed());
   }, []);
 
   useEffect(() => {

@@ -1,42 +1,70 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useI18n } from "@/components/language";
 import { readJson } from "@/lib/read-json";
 import type { SessionResponse } from "@/lib/types";
 
-const sessionListeners = new Set<() => void>();
+type Listener = () => void;
+
+let snapshot: SessionResponse | null = null;
+let errorSnapshot: string | null = null;
+let settled = false;
+let generation = 0;
+let inflight: Promise<void> | null = null;
+const listeners = new Set<Listener>();
+
+function emit() {
+  listeners.forEach((listener) => listener());
+}
+
+function loadSession(failedMessage: string) {
+  const ticket = ++generation;
+  const request = (async () => {
+    try {
+      const response = await fetch("/api/auth/session", { cache: "no-store" });
+      if (ticket !== generation) return;
+      snapshot = await readJson<SessionResponse>(response);
+      errorSnapshot = null;
+      settled = true;
+    } catch (caught) {
+      if (ticket !== generation) return;
+      errorSnapshot = caught instanceof Error ? caught.message : failedMessage;
+      settled = true;
+    } finally {
+      if (ticket === generation) {
+        inflight = null;
+        emit();
+      }
+    }
+  })();
+  inflight = request;
+  return request;
+}
 
 export function useSession() {
   const { t } = useI18n();
-  const [session, setSession] = useState<SessionResponse | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  const reload = useCallback(async () => {
-    try {
-      const response = await fetch("/api/auth/session", { cache: "no-store" });
-      setSession(await readJson<SessionResponse>(response));
-      setError(null);
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : t("session.failed"));
-    }
-  }, [t]);
-
-  const refresh = useCallback(async () => {
-    await reload();
-    sessionListeners.forEach((listener) => listener());
-  }, [reload]);
+  const failedMessage = useRef(t("session.failed"));
+  failedMessage.current = t("session.failed");
+  const [session, setSession] = useState<SessionResponse | null>(snapshot);
+  const [error, setError] = useState<string | null>(errorSnapshot);
 
   useEffect(() => {
-    const timeout = window.setTimeout(() => {
-      void reload();
-    }, 0);
-    sessionListeners.add(reload);
+    function sync() {
+      setSession(snapshot);
+      setError(errorSnapshot);
+    }
+    listeners.add(sync);
+    sync();
+    if (!settled && !inflight) void loadSession(failedMessage.current);
     return () => {
-      window.clearTimeout(timeout);
-      sessionListeners.delete(reload);
+      listeners.delete(sync);
     };
-  }, [reload]);
+  }, []);
 
-  return { session, error, reload: refresh };
+  const reload = useCallback(async () => {
+    await loadSession(failedMessage.current);
+  }, []);
+
+  return { session, error, reload };
 }

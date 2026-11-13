@@ -60,125 +60,123 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
         </div>
 
         {user && (user.role === "chef" || user.role === "driver") ? (
-          <Link
-            href={user.role === "chef" ? "/chef" : "/driver"}
-            className={`${itemClass} mt-6 flex items-center gap-3 font-medium`}
-            onClick={onClose}
-          >
-            <ProfilePhoto src={user.avatarDataUrl} label={t("header.profile")} className="size-12" />
-            <span className="min-w-0">
-              <span className="block truncate">{user.fullName}</span>
-              <span className="block text-sm text-muted">{t("header.profile")}</span>
-            </span>
-          </Link>
-        ) : null}
-
-        <section className="mt-6">
-          <button
-            type="button"
-            className={`${itemClass} flex items-center justify-between font-medium`}
-            aria-expanded={joinOpen}
-            onClick={() => setJoinOpen((current) => !current)}
-          >
-            <span>{t("sidebar.join")}</span>
-            <span aria-hidden="true">{joinOpen ? "–" : "+"}</span>
-          </button>
-          {joinOpen ? (
-            <div className="mt-2 grid gap-2">
-              <Link href="/chef" className={nestedClass} onClick={onClose}>
-                {t("sidebar.chef")}
-              </Link>
-              <Link href="/driver" className={nestedClass} onClick={onClose}>
-                {t("sidebar.driver")}
-              </Link>
-            </div>
-          ) : null}
-        </section>
-
-        <section className="mt-4">
-          {user ? (
-            <>
+          <div className="mt-6 grid gap-2">
+            <Link href={user.role === "chef" ? "/chef" : "/driver"} className={`${itemClass} font-medium`} onClick={onClose}>
+              {t("sidebar.myProfile")}
+            </Link>
+            <Link href={user.role === "chef" ? "/chef#orders" : "/driver#orders"} className={`${itemClass} font-medium`} onClick={onClose}>
+              {t("menu.orders")}
+            </Link>
+            <button type="button" className={`${itemClass} text-start font-medium`} onClick={() => void signOut()}>
+              {t("menu.signOut")}
+            </button>
+          </div>
+        ) : (
+          <>
+            <section className="mt-6">
               <button
                 type="button"
                 className={`${itemClass} flex items-center justify-between font-medium`}
-                aria-expanded={accountOpen}
-                onClick={() => setAccountOpen((current) => !current)}
+                aria-expanded={joinOpen}
+                onClick={() => setJoinOpen((current) => !current)}
               >
-                <span>{t("sidebar.account")}</span>
-                <span aria-hidden="true">{accountOpen ? "–" : "+"}</span>
+                <span>{t("sidebar.join")}</span>
+                <span aria-hidden="true">{joinOpen ? "–" : "+"}</span>
               </button>
-              {accountOpen ? (
+              {joinOpen ? (
                 <div className="mt-2 grid gap-2">
-                  <Link href="/account" className={nestedClass} onClick={onClose}>
-                    {t("menu.account")}
+                  <Link href="/chef" className={nestedClass} onClick={onClose}>
+                    {t("sidebar.chef")}
                   </Link>
-                  <Link href="/account#orders" className={nestedClass} onClick={onClose}>
-                    {t("menu.orders")}
+                  <Link href="/driver" className={nestedClass} onClick={onClose}>
+                    {t("sidebar.driver")}
                   </Link>
-                  <button type="button" className={nestedClass} onClick={() => void signOut()}>
-                    {t("menu.signOut")}
-                  </button>
                 </div>
               ) : null}
-            </>
-          ) : (
-            <Link href="/account" className={`${itemClass} font-medium`} onClick={onClose}>
-              {t("sidebar.account")}
-            </Link>
-          )}
-        </section>
+            </section>
 
-        {user && (user.role === "chef" || user.role === "driver") ? (
-          <section className="mt-4">
-            <Link href="/messages" className={`${itemClass} font-medium`} onClick={onClose}>
-              {t("chat.title")}
-            </Link>
-          </section>
-        ) : null}
+            <section className="mt-4">
+              {user ? (
+                <>
+                  <button
+                    type="button"
+                    className={`${itemClass} flex items-center justify-between font-medium`}
+                    aria-expanded={accountOpen}
+                    onClick={() => setAccountOpen((current) => !current)}
+                  >
+                    <span>{t("sidebar.account")}</span>
+                    <span aria-hidden="true">{accountOpen ? "–" : "+"}</span>
+                  </button>
+                  {accountOpen ? (
+                    <div className="mt-2 grid gap-2">
+                      <Link href="/account" className={nestedClass} onClick={onClose}>
+                        {t("menu.account")}
+                      </Link>
+                      <Link href="/account#orders" className={nestedClass} onClick={onClose}>
+                        {t("menu.orders")}
+                      </Link>
+                      <button type="button" className={nestedClass} onClick={() => void signOut()}>
+                        {t("menu.signOut")}
+                      </button>
+                    </div>
+                  ) : null}
+                </>
+              ) : (
+                <Link href="/account" className={`${itemClass} font-medium`} onClick={onClose}>
+                  {t("sidebar.account")}
+                </Link>
+              )}
+            </section>
 
-        <section className="mt-6">
-          <h2 className="px-1 text-sm font-medium text-muted">{t("sidebar.settings")}</h2>
-          <div className="mt-2 grid gap-2">
-            <button
-              type="button"
-              className={itemClass}
-              onClick={() => {
-                onClose();
-                openLanguage();
-              }}
-            >
-              {t("lang.preferred")}
-            </button>
-            <label className={`${itemClass} flex items-center justify-between gap-3`}>
-              <span>{t("sidebar.notifications")}</span>
-              <input
-                type="checkbox"
-                checked={notes}
-                onChange={(event) => {
-                  const next = event.target.checked;
-                  setNotes(next);
-                  window.localStorage.setItem(NOTICE_KEY, next ? "1" : "0");
-                }}
-              />
-            </label>
-          </div>
-        </section>
+            <section className="mt-6">
+              <h2 className="px-1 text-sm font-medium text-muted">{t("sidebar.settings")}</h2>
+              <div className="mt-2 grid gap-2">
+                <button
+                  type="button"
+                  className={itemClass}
+                  onClick={() => {
+                    onClose();
+                    openLanguage();
+                  }}
+                >
+                  {t("lang.preferred")}
+                </button>
+                <label className={`${itemClass} flex items-center justify-between gap-3`}>
+                  <span>{t("sidebar.notifications")}</span>
+                  <input
+                    type="checkbox"
+                    checked={notes}
+                    onChange={(event) => {
+                      const next = event.target.checked;
+                      setNotes(next);
+                      window.localStorage.setItem(NOTICE_KEY, next ? "1" : "0");
+                    }}
+                  />
+                </label>
+              </div>
+            </section>
 
-        <section className="mt-6">
-          <h2 className="px-1 text-sm font-medium text-muted">{t("sidebar.legal")}</h2>
-          <div className="mt-2 grid gap-2">
-            <Link href="/terms" className={itemClass} onClick={onClose}>
-              {t("sidebar.terms")}
-            </Link>
-            <Link href="/privacy" className={itemClass} onClick={onClose}>
-              {t("sidebar.privacy")}
-            </Link>
-          </div>
-        </section>
+            <section className="mt-6">
+              <h2 className="px-1 text-sm font-medium text-muted">{t("sidebar.legal")}</h2>
+              <div className="mt-2 grid gap-2">
+                <Link href="/terms" className={itemClass} onClick={onClose}>
+                  {t("sidebar.terms")}
+                </Link>
+                <Link href="/privacy" className={itemClass} onClick={onClose}>
+                  {t("sidebar.privacy")}
+                </Link>
+              </div>
+            </section>
+          </>
+        )}
 
-        <footer className="mt-auto pt-8 text-sm text-muted">
-          <p>{t("sidebar.version")}</p>
-          <p className="mt-1">Wajbati — {t("sidebar.intermediary")}</p>
+        <footer className="mt-auto pt-8">
+          {user ? (
+            <div className="flex items-center gap-3">
+              <ProfilePhoto src={user.avatarDataUrl} label={user.fullName} className="size-12" />
+              <p className="min-w-0 truncate font-medium">{user.fullName}</p>
+            </div>
+          ) : null}
         </footer>
       </aside>
     </div>

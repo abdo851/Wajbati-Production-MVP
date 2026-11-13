@@ -24,17 +24,18 @@ export async function POST(request: Request) {
       priceMad: price,
       maxQuantity: Number.isInteger(quantity) ? quantity : Math.round(quantity),
     });
-    const file = form.get("photo");
-    if (!(file instanceof File) || !sharpPhotoSize(file.size)) {
-      throw new StoreError(SHARP_PHOTO_ERROR, 400);
-    }
-    const bytes = Buffer.from(await file.arrayBuffer());
-    const contentType = sniffImage(bytes);
-    if (!contentType) throw new StoreError(SHARP_PHOTO_ERROR, 400);
+    const files = form.getAll("photo").filter((item): item is File => item instanceof File).slice(0, 8);
+    if (files.length === 0) throw new StoreError(SHARP_PHOTO_ERROR, 400);
     const repository = getRepository(accessToken);
     const meal = await repository.createMeal(user.chefId as string, input);
-    await repository.saveMealPhoto(meal.id, contentType, bytes);
-    return NextResponse.json({ meal: { ...meal, photoUrl: `/api/meals/${meal.id}/photo` } }, { status: 201 });
+    for (const file of files) {
+      if (!sharpPhotoSize(file.size)) throw new StoreError(SHARP_PHOTO_ERROR, 400);
+      const bytes = Buffer.from(await file.arrayBuffer());
+      const contentType = sniffImage(bytes);
+      if (!contentType) throw new StoreError(SHARP_PHOTO_ERROR, 400);
+      await repository.saveMealPhoto(meal.id, contentType, bytes);
+    }
+    return NextResponse.json({ meal: { ...meal, photoUrl: `/api/meals/${meal.id}/photo?i=0` } }, { status: 201 });
   });
 }
 

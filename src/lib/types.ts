@@ -36,6 +36,7 @@ export type AuthUser = {
   emailConfirmed: boolean;
   avatarDataUrl?: string | null;
   bio?: string | null;
+  gallery?: string[];
 };
 
 export type DemoAccount = {
@@ -56,7 +57,8 @@ export type PublicMeal = {
   serviceDate: string;
   kitchenName: string;
   city: string;
-  photoUrl: string | null;
+    photoUrl: string | null;
+  photoUrls?: string[];
 };
 
 export type ChefMeal = PublicMeal & {

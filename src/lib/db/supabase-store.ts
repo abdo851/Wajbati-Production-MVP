@@ -1034,8 +1034,12 @@ export function createSupabaseRepository(accessToken?: string) {
       console.warn("[supabase] meal photo storage is not available yet.");
     },
 
-    async readMealPhoto(_mealId: string): Promise<{ bytes: Buffer; contentType: string }> {
+    async readMealPhoto(_mealId: string, _index = 0): Promise<{ bytes: Buffer; contentType: string }> {
       throw new StoreError("That photo could not be found.", 404);
+    },
+
+    async addGalleryPhoto(): Promise<string[]> {
+      throw new StoreError("Supabase is not configured. Add the URL and anon key.", 500);
     },
 
     async addEmailCapture(email: string, source: string): Promise<void> {

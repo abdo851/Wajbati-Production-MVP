@@ -4,6 +4,7 @@ import { useEffect, useState, type ChangeEvent, type FormEvent } from "react";
 import Link from "next/link";
 import { LoginCard } from "@/components/login-card";
 import { ProfileExtras } from "@/components/profile-extras";
+import { PhotoGallery, PenButton } from "@/components/photo-gallery";
 import { ProfilePhoto } from "@/components/site-header";
 import { SecureInbox } from "@/components/secure-chat";
 import { WalletPanel } from "@/components/wallet-panel";
@@ -57,6 +58,7 @@ export function ChefDashboard() {
       bio={user.bio ?? ""}
       approval={user.approvalStatus ?? user.chefApprovalStatus}
       avatar={user.avatarDataUrl ?? null}
+      gallery={user.gallery ?? []}
       onAvatarSaved={reload}
       onLogout={reload}
     />
@@ -123,6 +125,7 @@ function Kitchen({
   bio,
   approval,
   avatar,
+  gallery,
   onAvatarSaved,
   onLogout,
 }: {
@@ -132,6 +135,7 @@ function Kitchen({
   bio: string;
   approval: ChefBoard["approvalStatus"] | null;
   avatar: string | null;
+  gallery: string[];
   onAvatarSaved: () => Promise<void>;
   onLogout: () => Promise<void>;
 }) {
@@ -142,15 +146,16 @@ function Kitchen({
   const [notice, setNotice] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
-  const [preview, setPreview] = useState<string | null>(null);
+  const [preview, setPreview] = useState<string[]>([]);
   const [editing, setEditing] = useState<string | null>(null);
   const [editingProfile, setEditingProfile] = useState(false);
+  const [album, setAlbum] = useState(gallery);
 
   async function publish(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const formElement = event.currentTarget;
     const form = new FormData(formElement);
-    const photo = form.get("photo");
+    const files = form.getAll("photo").filter((item): item is File => item instanceof File && item.size > 0).slice(0, 8);
     setPending(true);
     setFormError(null);
     setNotice(null);
@@ -159,18 +164,17 @@ function Kitchen({
       const description = String(form.get("description") ?? "");
       const priceMad = Number(form.get("priceMad"));
       const maxQuantity = Number(form.get("maxQuantity"));
-      const hasPhoto = photo instanceof File && photo.size > 0;
-      if (hasPhoto && (photo.size < 100 * 1024 || photo.size > 5 * 1024 * 1024)) {
+      if (files.some((file) => file.size < 100 * 1024 || file.size > 5 * 1024 * 1024)) {
         throw new Error(t("photo.quality"));
       }
       let response: Response;
-      if (hasPhoto && photo instanceof File) {
+      if (files.length > 0) {
         const body = new FormData();
         body.set("title", title);
         body.set("description", description);
         body.set("priceMad", String(priceMad));
         body.set("maxQuantity", String(maxQuantity));
-        body.set("photo", photo);
+        for (const file of files) body.append("photo", file);
         response = await fetch("/api/chef/meals", { method: "POST", body });
       } else {
         response = await fetch("/api/chef/meals", {
@@ -181,7 +185,7 @@ function Kitchen({
       }
       await readJson(response);
       formElement.reset();
-      setPreview(null);
+      setPreview([]);
       setNotice(t("chef.published"));
       await reload();
     } catch (caught) {
@@ -250,7 +254,10 @@ function Kitchen({
           </div>
         </div>
         <div className="mt-5 flex flex-wrap items-center gap-5">
-          <AvatarPicker initialSrc={avatar} onSaved={onAvatarSaved} />
+          <div className="relative">
+            <AvatarPicker initialSrc={avatar} onSaved={onAvatarSaved} />
+            <PenButton label={t("profile.edit")} onClick={() => setEditingProfile((open) => !open)} />
+          </div>
           <div className="min-w-0 flex-1">
             <h1 className="font-display text-4xl leading-tight">{userName}</h1>
             <p className="mt-1 text-sm text-muted">{data?.serviceDate ? formatServiceDate(data.serviceDate) : t("chef.tabProfile")}</p>
@@ -261,6 +268,7 @@ function Kitchen({
         </div>
         <p className="mt-6 text-sm font-medium text-muted">{t("profile.bio")}</p>
         <p className="mt-1 text-base leading-7">{bio || "—"}</p>
+        <PhotoGallery images={album} onChange={setAlbum} />
         <p className="mt-3 text-sm font-medium text-muted">{t("chef.city")}</p>
         <p className="mt-1 text-base text-terracotta">{city || "—"}</p>
         {editingProfile ? <ProfileExtras role="chef" onSaved={onAvatarSaved} /> : null}
@@ -276,10 +284,14 @@ function Kitchen({
           <label className="block text-sm">
             <span className="mb-1.5 block font-medium">{t("chef.photo")}</span>
             <span className="flex min-h-52 cursor-pointer flex-col items-center justify-center overflow-hidden rounded-3xl border border-dashed border-[#B85C3E]/50 bg-[#B85C3E]/10 px-4 py-6 text-center">
-              {preview ? (
-                <span className="mb-3 block aspect-video w-full overflow-hidden rounded-lg">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={preview} alt="" className="h-full w-full rounded-lg object-cover" />
+              {preview.length > 0 ? (
+                <span className="mb-3 grid w-full grid-cols-3 gap-2">
+                  {preview.map((src) => (
+                    <span key={src} className="aspect-square overflow-hidden rounded-lg">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={src} alt="" className="h-full w-full object-cover" />
+                    </span>
+                  ))}
                 </span>
               ) : (
                 <span className="mb-2 inline-flex size-12 items-center justify-center rounded-2xl bg-[#B85C3E] text-[#FAF6EF]" aria-hidden="true">
@@ -297,20 +309,17 @@ function Kitchen({
                 name="photo"
                 type="file"
                 accept="image/jpeg,image/png,image/webp"
+                multiple
                 onChange={(event) => {
-                  const file = event.target.files?.[0];
-                  if (!file) {
-                    setPreview(null);
-                    return;
-                  }
-                  if (file.size < 100 * 1024 || file.size > 5 * 1024 * 1024) {
+                  const files = Array.from(event.target.files ?? []).slice(0, 8);
+                  if (files.some((file) => file.size < 100 * 1024 || file.size > 5 * 1024 * 1024)) {
                     setFormError(t("photo.quality"));
                     event.target.value = "";
-                    setPreview(null);
+                    setPreview([]);
                     return;
                   }
                   setFormError(null);
-                  setPreview(URL.createObjectURL(file));
+                  setPreview(files.map((file) => URL.createObjectURL(file)));
                 }}
               />
             </span>
@@ -444,7 +453,7 @@ function OrderList({ orders, onChanged }: { orders: ChefOrder[]; onChanged: () =
 
   return (
     <section>
-      <h2 className="font-display text-2xl">{t("chef.orders")}</h2>
+      <h2 id="orders" className="font-display text-2xl">{t("chef.orders")}</h2>
       {error ? (
         <p role="alert" className="mt-2 text-sm text-terracotta-deep">
           {error}

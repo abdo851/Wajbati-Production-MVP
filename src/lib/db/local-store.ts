@@ -67,6 +67,7 @@ type Profile = {
   confirmationExpiresAt: string | null;
   avatarDataUrl: string | null;
   isActive: boolean;
+  isDeleted?: boolean;
 };
 
 type Chef = {
@@ -82,6 +83,7 @@ type Chef = {
   foodSafetyAcceptedAt: string | null;
   signatureDataUrl: string | null;
   kitchenPhotoDataUrl: string | null;
+  gallery?: string[];
   postponedAt: string | null;
   createdAt: string;
 };
@@ -98,6 +100,9 @@ type Meal = {
   isPublished: boolean;
   createdAt: string;
   photoPath: string | null;
+  photoPaths?: string[];
+  isDeleted?: boolean;
+  isActive?: boolean;
 };
 
 type Order = {
@@ -122,6 +127,8 @@ type Order = {
   deliveryCode: string;
   trackToken: string;
   status: OrderStatus;
+  isDeleted?: boolean;
+  isActive?: boolean;
   createdAt: string;
 };
 
@@ -162,7 +169,9 @@ type Driver = {
   avatarDataUrl: string | null;
   vehiclePhotoDataUrl: string | null;
   licensePhotoDataUrl: string | null;
+  gallery?: string[];
   isActive: boolean;
+  isDeleted?: boolean;
   postponedAt: string | null;
 };
 
@@ -685,7 +694,8 @@ async function readDb(fresh = false): Promise<{ db: Database; created: boolean; 
   let existing: Database | null = null;
   try {
     existing = await loadGraphWithRetry();
-  } catch {
+  } catch (error) {
+    console.error("LOAD_GRAPH", error instanceof Error ? error.message : "unknown");
     throw new StoreError("The order book could not be read.", 500);
   }
   if (existing) {
@@ -724,8 +734,18 @@ function chefFor(db: Database, chefId: string) {
   return db.chefs.find((chef) => chef.id === chefId && chef.isActive);
 }
 
+function mealPaths(meal: Meal): string[] {
+  if (meal.photoPaths && meal.photoPaths.length > 0) return meal.photoPaths;
+  return meal.photoPath ? [meal.photoPath] : [];
+}
+
+function mealIsVisible(meal: Meal): boolean {
+  return meal.isDeleted !== true && meal.isActive !== false;
+}
+
 function toPublicMeal(db: Database, meal: Meal): PublicMeal {
   const chef = db.chefs.find((item) => item.id === meal.chefId);
+  const paths = mealPaths(meal);
   return {
     id: meal.id,
     title: meal.title,
@@ -736,7 +756,8 @@ function toPublicMeal(db: Database, meal: Meal): PublicMeal {
     serviceDate: meal.serviceDate,
     kitchenName: chef?.kitchenName ?? "Kitchen",
     city: chef?.city ?? "",
-    photoUrl: meal.photoPath ? `/api/meals/${meal.id}/photo` : null,
+    photoUrl: paths.length > 0 ? `/api/meals/${meal.id}/photo?i=0` : null,
+    photoUrls: paths.map((_, index) => `/api/meals/${meal.id}/photo?i=${index}`),
   };
 }
 
@@ -804,6 +825,7 @@ function mapUser(db: Database, profile: Profile): AuthUser {
     emailConfirmed: profile.emailConfirmed,
     avatarDataUrl: profile.avatarDataUrl,
     bio: chef?.bio ?? "",
+    gallery: chef?.gallery ?? [],
   };
 }
 
@@ -826,6 +848,7 @@ function mapDriver(db: Database, driver: Driver): AuthUser {
     emailConfirmed: driver.emailConfirmed,
     avatarDataUrl: driver.avatarDataUrl,
     bio: driver.notes,
+    gallery: driver.gallery ?? [],
   };
 }
 
@@ -1341,7 +1364,7 @@ export const localRepository = {
       const meals = db.meals
         .filter((meal) => {
           const chef = chefFor(db, meal.chefId);
-          return Boolean(chef) && chef?.approvalStatus === "approved" && meal.isPublished === true && meal.serviceDate === serviceDate;
+          return Boolean(chef) && chef?.approvalStatus === "approved" && meal.isPublished === true && mealIsVisible(meal) && serviceDateInHistory(meal.serviceDate);
         })
         .sort((a, b) => Number(b.remainingQuantity > 0) - Number(a.remainingQuantity > 0))
         .map((meal) => toPublicMeal(db, meal));
@@ -1354,7 +1377,7 @@ export const localRepository = {
       const today = todayInCasablanca();
       const meal = db.meals.find((item) => item.id === input.mealId);
       const chef = meal ? chefFor(db, meal.chefId) : undefined;
-      if (!meal || !chef || !meal.isPublished || meal.serviceDate !== today) {
+      if (!meal || !chef || !meal.isPublished || !mealIsVisible(meal) || meal.serviceDate !== today) {
         throw new StoreError("This meal is not on today's board.", 404);
       }
       if (meal.remainingQuantity < input.quantity) {
@@ -1411,13 +1434,14 @@ export const localRepository = {
     return withDb((db) => {
       const today = todayInCasablanca();
       const meals = db.meals
-        .filter((meal) => meal.chefId === chefId && serviceDateInHistory(meal.serviceDate))
+        .filter((meal) => meal.chefId === chefId && mealIsVisible(meal))
         .sort((a, b) => b.serviceDate.localeCompare(a.serviceDate) || b.createdAt.localeCompare(a.createdAt))
         .map((meal) => toChefMeal(db, meal));
       const orders = db.orders
         .filter(
           (order) =>
             order.chefId === chefId &&
+            order.isDeleted !== true &&
             (order.status === "pending" ||
               order.status === "confirmed" ||
               order.status === "assigned" ||
@@ -1451,6 +1475,9 @@ export const localRepository = {
         isPublished: true,
         createdAt: new Date().toISOString(),
         photoPath: null,
+        photoPaths: [],
+        isDeleted: false,
+        isActive: true,
       };
       db.meals.push(meal);
       return toChefMeal(db, meal);
@@ -1477,9 +1504,9 @@ export const localRepository = {
       if (!meal) throw new StoreError("That meal could not be found.", 404);
       if (db.orders.some((order) => order.mealId === mealId)) {
         meal.isPublished = false;
-        return;
       }
-      db.meals = db.meals.filter((item) => item.id !== mealId);
+      meal.isDeleted = true;
+      meal.isActive = false;
     }, true);
   },
 
@@ -1489,23 +1516,17 @@ export const localRepository = {
       const chef = db.chefs.find((item) => item.profileId === profileId);
       if (!profile || !chef) throw new StoreError("That kitchen could not be found.", 404);
       if (chef.approvalStatus === "approved") throw new StoreError("This kitchen is already approved.", 400);
-      const hasOrders = db.orders.some((order) => order.chefId === chef.id);
-      if (hasOrders) {
-        chef.isActive = false;
-        profile.isActive = false;
-        profile.email = `withdrawn+${profile.id}@withdrawn.wajbati.local`;
-        profile.phone = `w${profile.id.replaceAll("-", "").slice(0, 12)}`;
-        return;
-      }
-      db.chefs = db.chefs.filter((item) => item.id !== chef.id);
-      db.profiles = db.profiles.filter((item) => item.id !== profile.id);
-      db.chefDocuments = db.chefDocuments.filter((item) => item.chefId !== chef.id);
+      chef.isActive = false;
+      profile.isActive = false;
+      profile.isDeleted = true;
+      profile.email = `withdrawn+${profile.id}@withdrawn.wajbati.local`;
+      profile.phone = `w${profile.id.replaceAll("-", "").slice(0, 12)}`;
     }, true);
   },
 
   async listStaff(): Promise<StaffAccount[]> {
     return withDb((db) => {
-      const chefs = db.chefs.map((chef) => {
+      const chefs = db.chefs.filter((chef) => db.profiles.find((item) => item.id === chef.profileId)?.isDeleted !== true).map((chef) => {
         const profile = db.profiles.find((item) => item.id === chef.profileId);
         return {
           id: chef.id,
@@ -1516,7 +1537,7 @@ export const localRepository = {
           email: profile?.email ?? "",
         };
       });
-      const drivers = db.drivers.map((driver) => ({
+      const drivers = db.drivers.filter((driver) => driver.isDeleted !== true).map((driver) => ({
         id: driver.id,
         name: driver.fullName,
         role: "driver" as const,
@@ -1563,7 +1584,7 @@ export const localRepository = {
   async adminOverview(): Promise<AdminOverview> {
     return withDb((db) => {
       const today = todayInCasablanca();
-      const active = db.orders.filter((order) => order.status !== "cancelled");
+      const active = db.orders.filter((order) => order.status !== "cancelled" && order.isDeleted !== true);
       const todayOrders = active.filter(
         (order) => todayInCasablanca(new Date(order.createdAt)) === today,
       );
@@ -1608,6 +1629,7 @@ export const localRepository = {
         kitchens,
         recentOrders,
         drivers: [...db.drivers]
+          .filter((driver) => driver.isDeleted !== true)
           .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
           .map((driver) => toDriverRecord(db, driver)),
         activeDeliveries: db.orders
@@ -1801,14 +1823,11 @@ export const localRepository = {
       if (!chef) throw new StoreError("That kitchen could not be found.", 404);
       const profile = db.profiles.find((item) => item.id === chef.profileId);
       if (profile?.role === "admin") throw new StoreError("That account could not be found.", 404);
-      for (const document of db.chefDocuments.filter((item) => item.chefId === chef.id)) {
-        await removePrivateFile(document.storagePath);
+      chef.isActive = false;
+      if (profile) {
+        profile.isActive = false;
+        profile.isDeleted = true;
       }
-      db.chefDocuments = db.chefDocuments.filter((item) => item.chefId !== chef.id);
-      db.chefs = db.chefs.filter((item) => item.id !== chef.id);
-      if (profile?.role === "chef") db.profiles = db.profiles.filter((item) => item.id !== profile.id);
-      db.wallets = db.wallets.filter((item) => item.profileId !== chef.profileId);
-      db.wallet_transactions = db.wallet_transactions.filter((item) => item.ownerId !== chef.profileId);
     }, true);
   },
 
@@ -1816,19 +1835,15 @@ export const localRepository = {
     await withDb(async (db) => {
       const driver = db.drivers.find((item) => item.id === driverId);
       if (!driver) throw new StoreError("That driver could not be found.", 404);
-      for (const document of db.documents.filter((item) => item.driverId === driver.id)) {
-        await removePrivateFile(document.storagePath);
-      }
-      db.documents = db.documents.filter((item) => item.driverId !== driver.id);
-      db.drivers = db.drivers.filter((item) => item.id !== driver.id);
-      db.wallets = db.wallets.filter((item) => item.profileId !== driver.id);
-      db.wallet_transactions = db.wallet_transactions.filter((item) => item.ownerId !== driver.id);
+      driver.isActive = false;
+      driver.isDeleted = true;
     }, true);
   },
 
   async listPendingChefs(): Promise<PublicChef[]> {
     return withDb((db) => {
       return db.chefs
+        .filter((chef) => db.profiles.find((item) => item.id === chef.profileId)?.isDeleted !== true)
         .filter((chef) => chef.approvalStatus === "pending" || chef.approvalStatus === "approved" || chef.approvalStatus === "rejected")
         .map((chef) => toPendingChef(db, chef));
     }, false);
@@ -1908,22 +1923,43 @@ export const localRepository = {
     await withDb(async (db) => {
       const meal = db.meals.find((item) => item.id === mealId);
       if (!meal) throw new StoreError("That meal could not be found.", 404);
-      const storagePath = `meals/${mealId}.${extensionFor(contentType)}`;
+      const paths = mealPaths(meal);
+      if (paths.length >= 8) throw new StoreError("Upload a JPG, PNG, or WEBP photo under 4 MB.", 400);
+      const storagePath = `meals/${mealId}/${randomUUID()}.${extensionFor(contentType)}`;
       await writePrivateFile(storagePath, bytes);
-      meal.photoPath = storagePath;
+      meal.photoPaths = [...paths, storagePath];
+      meal.photoPath = meal.photoPaths[0] ?? storagePath;
     }, true);
   },
 
-  async readMealPhoto(mealId: string): Promise<{ bytes: Buffer; contentType: string }> {
+  async readMealPhoto(mealId: string, index = 0): Promise<{ bytes: Buffer; contentType: string }> {
     const stored = await withDb((db) => db.meals.find((item) => item.id === mealId) ?? null, false);
-    if (!stored?.photoPath) throw new StoreError("That photo could not be found.", 404);
-    const bytes = await readPrivateFile(stored.photoPath);
-    const contentType = stored.photoPath.endsWith(".png")
+    const paths = stored ? mealPaths(stored) : [];
+    const photoPath = paths[index] ?? paths[0];
+    if (!photoPath) throw new StoreError("That photo could not be found.", 404);
+    const bytes = await readPrivateFile(photoPath);
+    const contentType = photoPath.endsWith(".png")
       ? "image/png"
-      : stored.photoPath.endsWith(".webp")
+      : photoPath.endsWith(".webp")
         ? "image/webp"
         : "image/jpeg";
     return { bytes, contentType };
+  },
+
+  async addGalleryPhoto(userId: string, image: string): Promise<string[]> {
+    return withDb((db) => {
+      const profile = db.profiles.find((item) => item.id === userId);
+      const chef = db.chefs.find((item) => item.profileId === userId);
+      const driver = db.drivers.find((item) => item.id === userId);
+      const current = chef?.gallery ?? driver?.gallery ?? [];
+      if (current.length >= 5) throw new StoreError("Upload a photo.", 400);
+      const next = [...current, image];
+      if (chef) chef.gallery = next;
+      if (driver) driver.gallery = next;
+      if (!chef && !driver && profile) throw new StoreError("That account could not be found.", 404);
+      if (!chef && !driver) throw new StoreError("That account could not be found.", 404);
+      return next;
+    }, true);
   },
 
   async addEmailCapture(email: string, source: string): Promise<void> {

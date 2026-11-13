@@ -1,4 +1,5 @@
 import { Suspense, type ReactNode } from "react";
+import { CustomerWelcome } from "@/components/customer-welcome";
 import { SiteFooter, SiteHeader } from "@/components/site-header";
 import { TermsGate } from "@/components/terms-gate";
 
@@ -11,6 +12,7 @@ export default function SiteLayout({ children }: { children: ReactNode }) {
       {children}
       <SiteFooter />
       <TermsGate />
+      <CustomerWelcome />
     </>
   );
 }

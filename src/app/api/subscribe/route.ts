@@ -12,7 +12,7 @@ export async function POST(request: Request) {
     if (!EMAIL.test(email)) {
       return NextResponse.json({ ok: false, error: "invalid_email" }, { status: 400 });
     }
-    const source = body.source === "company_interest" ? "company_interest" : "home_banner";
+    const source = body.source === "company_interest" || body.source === "welcome" ? body.source : "home_banner";
     await getRepository().addEmailCapture(email, source);
     return NextResponse.json({ ok: true });
   });
