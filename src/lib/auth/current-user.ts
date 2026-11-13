@@ -1,5 +1,5 @@
 import { cookies } from "next/headers";
-import { StoreError } from "@/lib/errors";
+import { LoginFailure, StoreError } from "@/lib/errors";
 import { authenticate, authenticateCustomer, authenticateDriver, dataProvider, findUser } from "@/lib/db";
 import { freshExpiry, openSession, sealSession, SESSION_COOKIE, type SessionPayload } from "@/lib/auth/session";
 import { isSuperAdmin } from "@/lib/super-admin";
@@ -60,9 +60,9 @@ export async function login(email: string, password: string, desk: "chef" | "adm
   token: string;
 }> {
   const result = await authenticate(email, password);
-  if (!result) throw new StoreError("Those credentials were not recognized.", 401);
+  if (!result) throw new LoginFailure("user not found");
   if (desk === "admin" && !isSuperAdmin(result.user)) {
-    throw new StoreError("Those credentials were not recognized.", 401);
+    throw new LoginFailure("user not found");
   }
   if (result.user.role !== desk) {
     throw new StoreError(deskMessage(result.user.role), 403);

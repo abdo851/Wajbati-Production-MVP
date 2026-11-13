@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { LanguageDialog, LanguageMenu, useI18n } from "@/components/language";
+import { PwaInstallButton } from "@/components/pwa-install-button";
 import { Sidebar } from "@/components/sidebar";
 import { useSession } from "@/components/use-session";
 
@@ -76,6 +77,7 @@ export function SiteHeader() {
                 <ProfilePhoto src={user?.avatarDataUrl} label={t("header.profile")} className="size-9" />
               </Link>
             ) : null}
+            <PwaInstallButton />
             <LanguageMenu />
             {name && !deskHref ? (
               <Link href="/account" className="hidden rounded-lg px-3 py-2 text-sm font-medium text-foreground md:inline">

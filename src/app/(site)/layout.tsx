@@ -10,9 +10,7 @@ export default function SiteLayout({ children }: { children: ReactNode }) {
       </Suspense>
       {children}
       <SiteFooter />
-      <Suspense fallback={null}>
-        <TermsGate />
-      </Suspense>
+      <TermsGate />
     </>
   );
 }

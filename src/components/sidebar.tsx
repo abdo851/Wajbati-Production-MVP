@@ -168,10 +168,10 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
           <h2 className="px-1 text-sm font-medium text-muted">{t("sidebar.legal")}</h2>
           <div className="mt-2 grid gap-2">
             <Link href="/terms" className={itemClass} onClick={onClose}>
-              {t("footer.terms")}
+              {t("sidebar.terms")}
             </Link>
             <Link href="/privacy" className={itemClass} onClick={onClose}>
-              {t("footer.privacy")}
+              {t("sidebar.privacy")}
             </Link>
           </div>
         </section>

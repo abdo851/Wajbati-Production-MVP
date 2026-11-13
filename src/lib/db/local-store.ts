@@ -8,7 +8,7 @@ import { DELIVERY_FEE_MAD, DRIVER_COMMISSION_MAD, PLATFORM_COMMISSION_MAD } from
 import { documentsAreReady, extensionFor, requiredChefDocuments, requiredDocumentKinds } from "@/lib/documents";
 import { DEMO_ACCOUNTS } from "@/lib/demo-accounts";
 import { DRIVER_DEMOS } from "@/lib/driver-demos";
-import { StoreError } from "@/lib/errors";
+import { LoginFailure, StoreError } from "@/lib/errors";
 import { removePrivateFile, writePrivateFile, readPrivateFile } from "@/lib/private-files";
 import { messageSharesContact } from "@/lib/contact-guard";
 import { roundMoney, serviceDateInHistory, todayInCasablanca } from "@/lib/format";
@@ -1096,9 +1096,10 @@ const DUMMY_HASH = `${"ab".repeat(16)}:${"cd".repeat(32)}`;
 
 export async function authenticateLocal(email: string, password: string): Promise<AuthUser | null> {
   return withDb((db) => {
-    const profile = db.profiles.find((item) => item.email === email);
+    const profile = db.profiles.find((item) => item.email.toLowerCase() === email.toLowerCase());
     const ok = verifyPassword(password, profile?.passwordHash ?? DUMMY_HASH);
-    if (!profile || !ok) return null;
+    if (!profile) throw new LoginFailure("user not found");
+    if (!ok) throw new LoginFailure("password mismatch");
     if (profile.role === "chef") {
       const kitchen = db.chefs.find((item) => item.profileId === profile.id && item.isActive) ?? db.chefs.find((item) => item.profileId === profile.id);
       if (kitchen?.approvalStatus === "approved") return mapUser(db, profile);

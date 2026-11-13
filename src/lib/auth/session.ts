@@ -9,9 +9,20 @@ export type SessionPayload = {
   exp: number;
 };
 
+const SECRET_WARNING =
+  "WAJBATI_SESSION_SECRET is missing. Set it in the Vercel project environment or production logins cannot keep a session.";
+
+export function warnIfSessionSecretMissing() {
+  if (process.env.WAJBATI_SESSION_SECRET?.trim()) return;
+  console.error(SECRET_WARNING);
+}
+
+warnIfSessionSecretMissing();
+
 function secret(): string {
-  const value = process.env.WAJBATI_SESSION_SECRET;
+  const value = process.env.WAJBATI_SESSION_SECRET?.trim();
   if (value) return value;
+  warnIfSessionSecretMissing();
   if (process.env.NODE_ENV === "production") {
     throw new Error("WAJBATI_SESSION_SECRET is required in production.");
   }
@@ -45,10 +56,11 @@ export function openSession(token: string | undefined): SessionPayload | null {
 }
 
 export function sessionCookieOptions() {
+  const production = process.env.NODE_ENV === "production";
   return {
     httpOnly: true,
     sameSite: "lax" as const,
-    secure: process.env.NODE_ENV === "production",
+    secure: production,
     path: "/",
     maxAge: SESSION_MAX_AGE_SECONDS,
   };
