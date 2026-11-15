@@ -86,7 +86,6 @@ export function ReviewModal({
         {view.signatureUrl ? (
           <div className="mt-4">
             <p className="text-sm font-medium">{t("admin.signature")}</p>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
             <div className="mt-2 aspect-video w-full overflow-hidden rounded-lg border border-line bg-white">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={view.signatureUrl} alt={t("admin.signature")} className="h-full w-full rounded-lg object-contain" />

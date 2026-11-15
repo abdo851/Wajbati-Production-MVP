@@ -45,7 +45,9 @@ function loadSession(failedMessage: string) {
 export function useSession() {
   const { t } = useI18n();
   const failedMessage = useRef(t("session.failed"));
-  failedMessage.current = t("session.failed");
+  useEffect(() => {
+    failedMessage.current = t("session.failed");
+  }, [t]);
   const [session, setSession] = useState<SessionResponse | null>(snapshot);
   const [error, setError] = useState<string | null>(errorSnapshot);
 

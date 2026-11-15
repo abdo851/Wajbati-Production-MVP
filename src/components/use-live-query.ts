@@ -9,7 +9,9 @@ const REQUEST_TIMEOUT_MS = 12000;
 export function useLiveQuery<T>(url: string | null, intervalMs = 4000) {
   const { t } = useI18n();
   const failedMessage = useRef(t("live.failed"));
-  failedMessage.current = t("live.failed");
+  useEffect(() => {
+    failedMessage.current = t("live.failed");
+  }, [t]);
   const [data, setData] = useState<T | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(Boolean(url));

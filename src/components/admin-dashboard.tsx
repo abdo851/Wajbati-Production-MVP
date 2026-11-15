@@ -643,7 +643,7 @@ function EmailCaptures() {
         .catch((caught: unknown) => setError(caught instanceof Error ? caught.message : t("admin.loadFailed")));
     }, 0);
     return () => window.clearTimeout(timeout);
-  }, []);
+  }, [t]);
 
   return (
     <section className="mt-8 rounded-3xl border border-line bg-card p-5">

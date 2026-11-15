@@ -42,13 +42,16 @@ export function PwaInstallButton() {
       setInstalled(true);
       setIosHelp(false);
     }
-    syncInstalled();
-    setReady(true);
     const media = window.matchMedia("(display-mode: standalone)");
     media.addEventListener("change", syncInstalled);
     window.addEventListener("beforeinstallprompt", onPrompt);
     window.addEventListener("appinstalled", onInstalled);
+    const timeout = window.setTimeout(() => {
+      syncInstalled();
+      setReady(true);
+    }, 0);
     return () => {
+      window.clearTimeout(timeout);
       media.removeEventListener("change", syncInstalled);
       window.removeEventListener("beforeinstallprompt", onPrompt);
       window.removeEventListener("appinstalled", onInstalled);

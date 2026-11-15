@@ -1,4 +1,4 @@
-const { chromium } = require("playwright");
+import { chromium } from "playwright";
 
 const PASSWORD = "ChefTest2026!";
 

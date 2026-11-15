@@ -27,9 +27,12 @@ export function ChefDashboard() {
   }, [t]);
 
   useEffect(() => {
-    if (window.sessionStorage.getItem("wajbati_chef_reapply") !== "1") return;
-    window.sessionStorage.removeItem("wajbati_chef_reapply");
-    setReapply(true);
+    const timeout = window.setTimeout(() => {
+      if (window.sessionStorage.getItem("wajbati_chef_reapply") !== "1") return;
+      window.sessionStorage.removeItem("wajbati_chef_reapply");
+      setReapply(true);
+    }, 0);
+    return () => window.clearTimeout(timeout);
   }, []);
 
   if (!session) {
@@ -68,11 +71,12 @@ export function ChefDashboard() {
 function AvatarPicker({ initialSrc, onSaved }: { initialSrc: string | null; onSaved: () => Promise<void> }) {
   const { t } = useI18n();
   const [src, setSrc] = useState(initialSrc);
+  const [prevInitialSrc, setPrevInitialSrc] = useState(initialSrc);
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
+  if (prevInitialSrc !== initialSrc) {
+    setPrevInitialSrc(initialSrc);
     setSrc(initialSrc);
-  }, [initialSrc]);
+  }
 
   async function choose(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];

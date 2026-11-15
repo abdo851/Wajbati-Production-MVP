@@ -16,13 +16,16 @@ export function CustomerWelcome() {
   const leadSent = useRef(false);
 
   useEffect(() => {
-    if (checked.current) return;
-    checked.current = true;
-    try {
-      setOpen(window.localStorage.getItem(VISIT_KEY) == null);
-    } catch {
-      setOpen(true);
-    }
+    const timeout = window.setTimeout(() => {
+      if (checked.current) return;
+      checked.current = true;
+      try {
+        setOpen(window.localStorage.getItem(VISIT_KEY) == null);
+      } catch {
+        setOpen(true);
+      }
+    }, 0);
+    return () => window.clearTimeout(timeout);
   }, []);
 
   if (!open) return null;

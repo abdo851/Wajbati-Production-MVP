@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useI18n } from "@/components/language";
 import { useSession } from "@/components/use-session";
 import { primaryButtonClass, quietButtonClass } from "@/components/ui";
@@ -12,13 +13,14 @@ import type { PublicChefProfile } from "@/lib/types";
 export function ChefPublicProfile({ initial }: { initial: PublicChefProfile }) {
   const { t, lang } = useI18n();
   const { session } = useSession();
+  const router = useRouter();
   const [profile, setProfile] = useState(initial);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function toggleFollow() {
     if (!session?.user || session.user.role !== "customer") {
-      window.location.href = "/account";
+      router.push("/account");
       return;
     }
     setBusy(true);

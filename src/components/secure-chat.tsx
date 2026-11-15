@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useI18n } from "@/components/language";
 import { inputClass, primaryButtonClass, quietButtonClass } from "@/components/ui";
 import { messageSharesContact } from "@/lib/contact-guard";
@@ -25,7 +25,7 @@ export function SecureChat({ mealId, orderId, threadId }: Target) {
   const [warning, setWarning] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
-  const target = { mealId, orderId, threadId };
+  const target = useMemo(() => ({ mealId, orderId, threadId }), [mealId, orderId, threadId]);
 
   useEffect(() => {
     let stopped = false;
@@ -47,7 +47,7 @@ export function SecureChat({ mealId, orderId, threadId }: Target) {
       stopped = true;
       window.clearInterval(timer);
     };
-  }, [mealId, orderId, threadId, t]);
+  }, [target, t]);
 
   async function send(event: FormEvent) {
     event.preventDefault();
