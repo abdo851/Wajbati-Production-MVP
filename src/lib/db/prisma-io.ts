@@ -223,6 +223,7 @@ async function writeGraph(tx: Writer, db: Database) {
       foodSafetyAcceptedAt: asTime(chef.foodSafetyAcceptedAt),
       kitchenPhotoDataUrl: chef.kitchenPhotoDataUrl,
       gallery: chef.gallery ?? [],
+      averageRating: chef.averageRating ?? 0,
       postponedAt: asTime(chef.postponedAt),
       isActive: chef.isActive,
       createdAt: asTime(chef.createdAt) ?? new Date(),
@@ -295,9 +296,20 @@ async function writeGraph(tx: Writer, db: Database) {
       paymentMethod: order.paymentMethod,
       paymentStatus: order.paymentStatus,
       trackToken: order.trackToken,
+      rating: typeof order.rating === "number" ? order.rating : null,
+      review: order.review ?? null,
       isDeleted: order.isDeleted === true,
       isActive: order.isActive !== false,
       createdAt: asTime(order.createdAt) ?? new Date(),
+    }));
+
+  const follows: Prisma.FollowCreateManyInput[] = (db.follows ?? [])
+    .filter((row) => userIds.has(row.customerId) && userIds.has(row.chefId))
+    .map((row) => ({
+      id: row.id,
+      customerId: row.customerId,
+      chefId: row.chefId,
+      createdAt: asTime(row.createdAt) ?? new Date(),
     }));
 
   const transactions: Prisma.WalletTransactionCreateManyInput[] = db.wallet_transactions
@@ -369,6 +381,7 @@ async function writeGraph(tx: Writer, db: Database) {
   }));
 
   await tx.message.deleteMany();
+  await tx.follow.deleteMany();
   await tx.walletTransaction.deleteMany();
   await tx.order.deleteMany();
   await tx.meal.deleteMany();
@@ -392,6 +405,7 @@ async function writeGraph(tx: Writer, db: Database) {
   await insertMany(drivers, (rows) => tx.driverProfile.createMany({ data: rows }));
   await insertMany(meals, (rows) => tx.meal.createMany({ data: rows }));
   await insertMany(orders, (rows) => tx.order.createMany({ data: rows }));
+  await insertMany(follows, (rows) => tx.follow.createMany({ data: rows }));
   await insertMany(transactions, (rows) => tx.walletTransaction.createMany({ data: rows }));
   await insertMany(messages, (rows) => tx.message.createMany({ data: rows }));
   await insertMany(support, (rows) => tx.supportMessage.createMany({ data: rows }));
@@ -400,7 +414,7 @@ async function writeGraph(tx: Writer, db: Database) {
 }
 
 export async function loadGraph(): Promise<Database | null> {
-  const [users, chefs, drivers, meals, orders, transactions, messages, support, files, captures, settings] = await Promise.all([
+  const [users, chefs, drivers, meals, orders, transactions, messages, support, files, captures, settings, follows] = await Promise.all([
     prisma.user.findMany(),
     prisma.chefProfile.findMany(),
     prisma.driverProfile.findMany(),
@@ -412,6 +426,7 @@ export async function loadGraph(): Promise<Database | null> {
     prisma.storedFile.findMany(),
     prisma.emailCapture.findMany(),
     prisma.platformSetting.findUnique({ where: { id: "default" } }),
+    prisma.follow.findMany(),
   ]);
   if (users.length === 0) return null;
   const usersById = new Map(users.map((user) => [user.id, user]));
@@ -450,6 +465,7 @@ export async function loadGraph(): Promise<Database | null> {
         signatureDataUrl: user.signatureUrl,
         kitchenPhotoDataUrl: chef.kitchenPhotoDataUrl,
         gallery: chef.gallery ?? [],
+        averageRating: chef.averageRating ?? 0,
         postponedAt: iso(chef.postponedAt),
         createdAt: (iso(chef.createdAt) ?? new Date(0).toISOString()),
       },
@@ -536,6 +552,8 @@ export async function loadGraph(): Promise<Database | null> {
       deliveryCode: order.otpCode,
       trackToken: order.trackToken,
       status: flowOf(order.flowStatus, order.status),
+      rating: order.rating,
+      review: order.review,
       isDeleted: order.isDeleted,
       isActive: order.isActive,
       createdAt: order.createdAt.toISOString(),
@@ -611,6 +629,12 @@ export async function loadGraph(): Promise<Database | null> {
       amountMad: row.amount,
       note: row.note === "commission" ? "commission" : "adjustment",
       orderId: row.referenceId,
+      createdAt: row.createdAt.toISOString(),
+    })),
+    follows: follows.map((row) => ({
+      id: row.id,
+      customerId: row.customerId,
+      chefId: row.chefId,
       createdAt: row.createdAt.toISOString(),
     })),
   };

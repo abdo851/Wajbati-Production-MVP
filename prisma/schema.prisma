@@ -58,6 +58,8 @@ model User {
   transactions     WalletTransaction[]
   sentMessages     Message[]           @relation("SentMessages")
   receivedMessages Message[]           @relation("ReceivedMessages")
+  following        Follow[]            @relation("CustomerFollows")
+  followers        Follow[]            @relation("ChefFollowers")
 }
 
 model ChefProfile {
@@ -73,9 +75,23 @@ model ChefProfile {
   foodSafetyAcceptedAt   DateTime?
   kitchenPhotoDataUrl    String?   @db.Text
   gallery                String[]  @default([])
+  averageRating          Float     @default(0) @map("average_rating")
   postponedAt            DateTime?
   isActive               Boolean   @default(true)
   createdAt              DateTime  @default(now()) @map("created_at")
+}
+
+model Follow {
+  id         String   @id @default(cuid())
+  customerId String
+  customer   User     @relation("CustomerFollows", fields: [customerId], references: [id], onDelete: Cascade)
+  chefId     String
+  chef       User     @relation("ChefFollowers", fields: [chefId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@unique([customerId, chefId])
+  @@index([customerId])
+  @@index([chefId])
 }
 
 model DriverProfile {
@@ -136,6 +152,8 @@ model Order {
   paymentMethod        String
   paymentStatus        String
   trackToken           String      @unique
+  rating               Int?
+  review               String?     @db.Text
   isDeleted            Boolean     @default(false) @map("is_deleted")
   isActive             Boolean     @default(true) @map("is_active")
   createdAt            DateTime    @default(now()) @map("created_at")

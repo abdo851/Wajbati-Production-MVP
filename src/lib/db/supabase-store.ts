@@ -38,6 +38,7 @@ import type {
   OrderTracking,
   PaymentStatus,
   PlaceOrderInput,
+  PublicChefProfile,
   PublicMeal,
   RecentOrder,
   StaffAccount,
@@ -1138,6 +1139,22 @@ export function createSupabaseRepository(accessToken?: string) {
 
     async listStaff(): Promise<StaffAccount[]> {
       return [];
+    },
+
+    async rateOrder(): Promise<OrderTracking> {
+      throw new StoreError("Supabase is not configured. Add the URL and anon key.", 500);
+    },
+
+    async publicChef(): Promise<PublicChefProfile> {
+      throw new StoreError("Supabase is not configured. Add the URL and anon key.", 500);
+    },
+
+    async followChef(): Promise<{ following: boolean }> {
+      throw new StoreError("Supabase is not configured. Add the URL and anon key.", 500);
+    },
+
+    async listFollowingMeals(): Promise<MealListResponse> {
+      return { serviceDate: todayInCasablanca(), meals: [] };
     },
   };
 }

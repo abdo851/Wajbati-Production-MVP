@@ -1,4 +1,5 @@
 import { Suspense, type ReactNode } from "react";
+import { BottomNav } from "@/components/bottom-nav";
 import { CustomerWelcome } from "@/components/customer-welcome";
 import { SiteFooter, SiteHeader } from "@/components/site-header";
 import { TermsGate } from "@/components/terms-gate";
@@ -9,8 +10,11 @@ export default function SiteLayout({ children }: { children: ReactNode }) {
       <Suspense fallback={<div className="h-16 border-b border-line/80 bg-background/80" />}>
         <SiteHeader />
       </Suspense>
-      {children}
+      <div className="flex-1 pb-20 md:pb-0">{children}</div>
       <SiteFooter />
+      <Suspense fallback={null}>
+        <BottomNav />
+      </Suspense>
       <TermsGate />
       <CustomerWelcome />
     </>

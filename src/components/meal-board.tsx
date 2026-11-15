@@ -127,7 +127,13 @@ function MealCard({ meal, canOrder, onOrder }: { meal: PublicMeal; canOrder: boo
       </div>
       <div className="flex flex-1 flex-col gap-1 p-2.5">
         <h3 className="line-clamp-2 min-h-10 text-sm font-medium leading-5 text-foreground">{meal.title}</h3>
-        <p className="truncate text-xs text-muted">{meal.kitchenName}</p>
+        {meal.chefId ? (
+          <Link href={`/chef/${meal.chefId}`} className="truncate text-xs text-terracotta-deep underline">
+            {meal.kitchenName}
+          </Link>
+        ) : (
+          <p className="truncate text-xs text-muted">{meal.kitchenName}</p>
+        )}
         <p className="text-sm font-semibold text-foreground">{formatMad(meal.priceMad, lang)}</p>
         <button
           type="button"

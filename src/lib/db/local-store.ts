@@ -4,6 +4,7 @@ import { loadGraph, saveGraph } from "@/lib/db/prisma-io";
 import { randomBytes, randomUUID, scryptSync, timingSafeEqual } from "crypto";
 import { codesMatch, newDeliveryCode, newTrackToken } from "@/lib/delivery-code";
 import { financeOf, rowsOnDate, rowsThisWeek } from "@/lib/finance";
+import { calculateDynamicCommission } from "@/lib/commission";
 import { DELIVERY_FEE_MAD, DRIVER_COMMISSION_MAD, PLATFORM_COMMISSION_MAD } from "@/lib/constants";
 import { documentsAreReady, extensionFor, requiredChefDocuments, requiredDocumentKinds } from "@/lib/documents";
 import { DEMO_ACCOUNTS } from "@/lib/demo-accounts";
@@ -48,6 +49,7 @@ import type {
   PaymentMethod,
   PaymentStatus,
   PlaceOrderInput,
+  PublicChefProfile,
   PublicMeal,
   RecentOrder,
   StaffAccount,
@@ -84,6 +86,7 @@ type Chef = {
   signatureDataUrl: string | null;
   kitchenPhotoDataUrl: string | null;
   gallery?: string[];
+  averageRating?: number;
   postponedAt: string | null;
   createdAt: string;
 };
@@ -127,8 +130,17 @@ type Order = {
   deliveryCode: string;
   trackToken: string;
   status: OrderStatus;
+  rating?: number | null;
+  review?: string | null;
   isDeleted?: boolean;
   isActive?: boolean;
+  createdAt: string;
+};
+
+type FollowRow = {
+  id: string;
+  customerId: string;
+  chefId: string;
   createdAt: string;
 };
 
@@ -227,6 +239,7 @@ export type Database = {
   direct_messages: DirectRow[];
   settings: CommissionSettings;
   wallet_transactions: WalletTxn[];
+  follows: FollowRow[];
 };
 
 type Wallet = {
@@ -438,6 +451,7 @@ function seed(): Database {
     direct_messages: [],
     settings: { chefCommissionMad: 1, driverCommissionMad: 1 },
     wallet_transactions: [],
+    follows: [],
   };
 }
 
@@ -509,6 +523,10 @@ function normalize(db: Database): boolean {
   }
   if (!Array.isArray(db.wallet_transactions)) {
     db.wallet_transactions = [];
+    changed = true;
+  }
+  if (!Array.isArray(db.follows)) {
+    db.follows = [];
     changed = true;
   }
   for (const profile of db.profiles) {
@@ -748,6 +766,7 @@ function toPublicMeal(db: Database, meal: Meal): PublicMeal {
   const paths = mealPaths(meal);
   return {
     id: meal.id,
+    chefId: meal.chefId,
     title: meal.title,
     description: meal.description,
     priceMad: meal.priceMad,
@@ -759,6 +778,18 @@ function toPublicMeal(db: Database, meal: Meal): PublicMeal {
     photoUrl: paths.length > 0 ? `/api/meals/${meal.id}/photo?i=0` : null,
     photoUrls: paths.map((_, index) => `/api/meals/${meal.id}/photo?i=${index}`),
   };
+}
+
+function refreshChefAverage(db: Database, chefId: string) {
+  const chef = db.chefs.find((item) => item.id === chefId);
+  if (!chef) return;
+  const rated = db.orders.filter((order) => order.chefId === chefId && typeof order.rating === "number" && order.rating >= 1);
+  if (rated.length === 0) {
+    chef.averageRating = 0;
+    return;
+  }
+  const total = rated.reduce((sum, order) => sum + (order.rating ?? 0), 0);
+  chef.averageRating = roundMoney(total / rated.length);
 }
 
 function toChefMeal(db: Database, meal: Meal): ChefMeal {
@@ -866,14 +897,16 @@ function alreadyCharged(db: Database, ownerId: string, orderId: string) {
 
 function chargeDeliveryCommissions(db: Database, order: Order) {
   if (order.status !== "delivered") return;
-  const settings = settingsOf(db);
+  const fees = calculateDynamicCommission(order.unitPriceMad, order.quantity);
+  order.commissionPerMealMad = fees.chefPerPortionMad;
+  order.commissionMad = fees.chefCommissionMad;
+  order.driverCommissionMad = fees.driverCommissionMad;
   const chef = db.chefs.find((item) => item.id === order.chefId);
-  if (chef && settings.chefCommissionMad > 0 && !alreadyCharged(db, chef.profileId, order.id)) {
-    moveWallet(db, chef.profileId, -settings.chefCommissionMad, "commission", order.id);
+  if (chef && fees.chefCommissionMad > 0 && !alreadyCharged(db, chef.profileId, order.id)) {
+    moveWallet(db, chef.profileId, -fees.chefCommissionMad, "commission", order.id);
   }
-  if (order.driverId && settings.driverCommissionMad > 0 && !alreadyCharged(db, order.driverId, order.id)) {
-    order.driverCommissionMad = settings.driverCommissionMad;
-    moveWallet(db, order.driverId, -settings.driverCommissionMad, "commission", order.id);
+  if (order.driverId && fees.driverCommissionMad > 0 && !alreadyCharged(db, order.driverId, order.id)) {
+    moveWallet(db, order.driverId, -fees.driverCommissionMad, "commission", order.id);
   }
 }
 
@@ -1384,6 +1417,7 @@ export const localRepository = {
         throw new StoreError("Not enough portions left.", 409);
       }
       meal.remainingQuantity -= input.quantity;
+      const fees = calculateDynamicCommission(meal.priceMad, input.quantity);
       const createdAt = new Date().toISOString();
       const order: Order = {
         id: randomUUID(),
@@ -1394,11 +1428,11 @@ export const localRepository = {
         deliveryAddress: input.deliveryAddress,
         quantity: input.quantity,
         unitPriceMad: meal.priceMad,
-        commissionPerMealMad: PLATFORM_COMMISSION_MAD,
+        commissionPerMealMad: fees.chefPerPortionMad,
         totalMad: roundMoney(meal.priceMad * input.quantity),
-        commissionMad: roundMoney(PLATFORM_COMMISSION_MAD * input.quantity),
+        commissionMad: fees.chefCommissionMad,
         deliveryFeeMad: DELIVERY_FEE_MAD,
-        driverCommissionMad: DRIVER_COMMISSION_MAD,
+        driverCommissionMad: fees.driverCommissionMad,
         driverId: null,
         customerNotes: input.customerNotes,
         customerEmail: null,
@@ -1407,6 +1441,8 @@ export const localRepository = {
         deliveryCode: newDeliveryCode(),
         trackToken: newTrackToken(),
         status: "pending",
+        rating: null,
+        review: null,
         createdAt,
       };
       db.orders.push(order);
@@ -1736,8 +1772,10 @@ export const localRepository = {
       const meal = db.meals.find((item) => item.id === order.mealId);
       const chef = db.chefs.find((item) => item.id === order.chefId);
       return {
+        orderId: order.id,
         mealTitle: meal?.title ?? "Meal",
         kitchenName: chef?.kitchenName ?? "Kitchen",
+        chefId: order.chefId,
         deliveryAddress: order.deliveryAddress,
         quantity: order.quantity,
         totalMad: order.totalMad,
@@ -1745,8 +1783,117 @@ export const localRepository = {
         customerNotes: order.customerNotes,
         status: order.status,
         deliveryCode: order.deliveryCode,
+        rating: order.rating ?? null,
+        review: order.review ?? null,
         createdAt: order.createdAt,
       };
+    }, false);
+  },
+
+  async rateOrder(token: string, rating: number, review: string): Promise<OrderTracking> {
+    return withDb((db) => {
+      const order = db.orders.find((item) => item.trackToken === token);
+      if (!order) throw new StoreError("That order could not be found.", 404);
+      if (order.status !== "delivered") throw new StoreError("That status change is not allowed.", 409);
+      if (typeof order.rating === "number" && order.rating >= 1) {
+        throw new StoreError("That status change is not allowed.", 409);
+      }
+      if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
+        throw new StoreError("That status is not recognized.", 400);
+      }
+      order.rating = rating;
+      order.review = review.trim().slice(0, 400) || null;
+      refreshChefAverage(db, order.chefId);
+      const meal = db.meals.find((item) => item.id === order.mealId);
+      const chef = db.chefs.find((item) => item.id === order.chefId);
+      return {
+        orderId: order.id,
+        mealTitle: meal?.title ?? "Meal",
+        kitchenName: chef?.kitchenName ?? "Kitchen",
+        chefId: order.chefId,
+        deliveryAddress: order.deliveryAddress,
+        quantity: order.quantity,
+        totalMad: order.totalMad,
+        deliveryFeeMad: order.deliveryFeeMad,
+        customerNotes: order.customerNotes,
+        status: order.status,
+        deliveryCode: order.deliveryCode,
+        rating: order.rating ?? null,
+        review: order.review ?? null,
+        createdAt: order.createdAt,
+      };
+    }, true);
+  },
+
+  async publicChef(chefId: string, viewerId: string | null): Promise<PublicChefProfile> {
+    return withDb((db) => {
+      const chef = db.chefs.find((item) => item.id === chefId && item.isActive);
+      if (!chef || chef.approvalStatus !== "approved") throw new StoreError("That kitchen could not be found.", 404);
+      const profile = db.profiles.find((item) => item.id === chef.profileId);
+      const meals = db.meals
+        .filter((meal) => meal.chefId === chef.id && meal.isPublished && mealIsVisible(meal) && serviceDateInHistory(meal.serviceDate))
+        .sort((a, b) => b.serviceDate.localeCompare(a.serviceDate))
+        .map((meal) => toPublicMeal(db, meal));
+      const following = Boolean(
+        viewerId && db.follows.some((row) => row.customerId === viewerId && row.chefId === chef.profileId),
+      );
+      return {
+        id: chef.id,
+        userId: chef.profileId,
+        kitchenName: chef.kitchenName,
+        bio: chef.bio,
+        city: chef.city,
+        avatarUrl: profile?.avatarDataUrl ?? null,
+        coverUrl: chef.kitchenPhotoDataUrl ?? chef.gallery?.[0] ?? null,
+        gallery: chef.gallery ?? [],
+        averageRating: chef.averageRating ?? 0,
+        following,
+        meals,
+      };
+    }, false);
+  },
+
+  async followChef(customerId: string, chefId: string): Promise<{ following: boolean }> {
+    return withDb((db) => {
+      const customer = db.profiles.find((item) => item.id === customerId && item.role === "customer");
+      if (!customer) throw new StoreError("Sign in to continue.", 403);
+      const chef = db.chefs.find((item) => item.id === chefId && item.isActive);
+      if (!chef || chef.approvalStatus !== "approved") throw new StoreError("That kitchen could not be found.", 404);
+      const exists = db.follows.find((row) => row.customerId === customerId && row.chefId === chef.profileId);
+      if (exists) {
+        db.follows = db.follows.filter((row) => row.id !== exists.id);
+        return { following: false };
+      }
+      db.follows.push({
+        id: randomUUID(),
+        customerId,
+        chefId: chef.profileId,
+        createdAt: new Date().toISOString(),
+      });
+      return { following: true };
+    }, true);
+  },
+
+  async listFollowingMeals(customerId: string): Promise<MealListResponse> {
+    return withDb((db) => {
+      const serviceDate = todayInCasablanca();
+      const followedUserIds = new Set(db.follows.filter((row) => row.customerId === customerId).map((row) => row.chefId));
+      const chefIds = new Set(db.chefs.filter((chef) => followedUserIds.has(chef.profileId)).map((chef) => chef.id));
+      const meals = db.meals
+        .filter((meal) => {
+          const chef = chefFor(db, meal.chefId);
+          return (
+            chefIds.has(meal.chefId) &&
+            Boolean(chef) &&
+            chef?.approvalStatus === "approved" &&
+            meal.isPublished === true &&
+            mealIsVisible(meal) &&
+            serviceDateInHistory(meal.serviceDate)
+          );
+        })
+        .sort((a, b) => Number(b.remainingQuantity > 0) - Number(a.remainingQuantity > 0))
+        .map((meal) => toPublicMeal(db, meal));
+      return { serviceDate, meals };
     }, false);
   },
 

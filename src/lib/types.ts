@@ -49,6 +49,7 @@ export type DemoAccount = {
 
 export type PublicMeal = {
   id: string;
+  chefId?: string;
   title: string;
   description: string;
   priceMad: number;
@@ -57,8 +58,22 @@ export type PublicMeal = {
   serviceDate: string;
   kitchenName: string;
   city: string;
-    photoUrl: string | null;
+  photoUrl: string | null;
   photoUrls?: string[];
+};
+
+export type PublicChefProfile = {
+  id: string;
+  userId: string;
+  kitchenName: string;
+  bio: string;
+  city: string;
+  avatarUrl: string | null;
+  coverUrl: string | null;
+  gallery: string[];
+  averageRating: number;
+  following: boolean;
+  meals: PublicMeal[];
 };
 
 export type ChefMeal = PublicMeal & {
@@ -126,8 +141,10 @@ export type OrderReceipt = {
 };
 
 export type OrderTracking = {
+  orderId?: string;
   mealTitle: string;
   kitchenName: string;
+  chefId?: string;
   deliveryAddress: string;
   quantity: number;
   totalMad: number;
@@ -135,6 +152,8 @@ export type OrderTracking = {
   customerNotes: string;
   status: OrderStatus;
   deliveryCode: string;
+  rating?: number | null;
+  review?: string | null;
   createdAt: string;
 };
 

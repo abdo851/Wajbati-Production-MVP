@@ -5,8 +5,13 @@ import { parseOrderInput, readBody } from "@/lib/validators";
 
 export async function POST(request: Request) {
   return handle(async () => {
-    const input = parseOrderInput(await readBody(request));
-    const order = await getRepository().placeOrder(input);
-    return NextResponse.json({ order }, { status: 201 });
+    try {
+      const input = parseOrderInput(await readBody(request));
+      const order = await getRepository().placeOrder(input);
+      return NextResponse.json({ order }, { status: 201 });
+    } catch (error) {
+      console.error("ORDER", error instanceof Error ? error.message : "unknown");
+      throw error;
+    }
   });
 }
