@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { motion } from "framer-motion";
 import { useI18n } from "@/components/language";
 import { useSession } from "@/components/use-session";
 
@@ -19,15 +20,22 @@ export function BottomNav() {
   ] as const;
 
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-card/95 pb-safe backdrop-blur md:hidden" aria-label={t("nav.home")}>
+    <nav className="glass fixed inset-x-0 bottom-0 z-40 pb-safe shadow-[0_-8px_32px_-16px_rgba(23,19,15,0.18)] md:hidden" aria-label={t("nav.home")}>
       <ul className="mx-auto flex max-w-lg items-stretch justify-around px-2 py-1.5">
         {items.map((item) => {
           const active = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
           return (
-            <li key={item.href} className="flex-1">
+            <li key={item.href} className="relative flex-1">
+              {active ? (
+                <motion.span
+                  layoutId="bottom-nav-active-pill"
+                  className="absolute inset-0 rounded-2xl bg-gold/12"
+                  transition={{ type: "spring", stiffness: 420, damping: 34 }}
+                />
+              ) : null}
               <Link
                 href={item.href}
-                className={`flex min-h-12 flex-col items-center justify-center gap-0.5 rounded-2xl px-2 text-[11px] font-medium ${active ? "text-terracotta" : "text-muted"}`}
+                className={`relative flex min-h-12 flex-col items-center justify-center gap-0.5 rounded-2xl px-2 text-[11px] font-semibold transition-colors duration-200 ${active ? "text-gold-deep" : "text-muted"}`}
               >
                 <item.icon active={active} />
                 <span>{item.label}</span>

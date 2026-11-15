@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { motion } from "framer-motion";
 import { useI18n } from "@/components/language";
 import { inputClass, primaryButtonClass, quietButtonClass } from "@/components/ui";
 
@@ -54,23 +55,37 @@ export function CustomerWelcome() {
   }
 
   return (
-    <div className="fixed inset-0 z-[180] flex items-center justify-center bg-[#1E1A15]/45 px-4" role="dialog" aria-modal="true" aria-labelledby="welcome-title">
-      <div className="w-full max-w-md rounded-3xl border border-line bg-card p-6 shadow-[0_12px_40px_rgba(30,26,21,0.18)]">
+    <motion.div
+      className="fixed inset-0 z-[180] flex items-center justify-center bg-ink/50 px-4 backdrop-blur-md"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="welcome-title"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.2 }}
+    >
+      <motion.div
+        className="w-full max-w-md rounded-3xl border border-line/70 bg-card/95 p-6 shadow-lux-lg backdrop-blur-xl sm:p-8"
+        initial={{ opacity: 0, scale: 0.94, y: 20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        transition={{ type: "spring", stiffness: 320, damping: 28 }}
+      >
         <h2 id="welcome-title" className="font-display text-3xl leading-tight">
           {t("welcome.gateTitle")}
         </h2>
         {step === "choose" ? (
           <div className="mt-6 grid gap-3">
             <label className="block text-sm">
-              <span className="mb-1.5 block font-medium">{t("welcome.email")}</span>
+              <span className="mb-1.5 block font-semibold">{t("welcome.email")}</span>
               <input className={inputClass} type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder={t("welcome.email")} />
             </label>
-            <button type="button" className={primaryButtonClass} onClick={() => choose("order")}>
+            <motion.button type="button" className={primaryButtonClass} onClick={() => choose("order")} whileTap={{ scale: 0.97 }}>
               {t("welcome.orderOnly")}
-            </button>
-            <button type="button" className={quietButtonClass} onClick={() => choose("join")}>
+            </motion.button>
+            <motion.button type="button" className={quietButtonClass} onClick={() => choose("join")} whileTap={{ scale: 0.97 }}>
               {t("welcome.join")}
-            </button>
+            </motion.button>
           </div>
         ) : (
           <div className="mt-6 grid gap-3">
@@ -82,7 +97,7 @@ export function CustomerWelcome() {
             </Link>
           </div>
         )}
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 }

@@ -108,7 +108,7 @@ function AvatarPicker({ initialSrc, onSaved }: { initialSrc: string | null; onSa
 
   return (
     <div className="mt-4">
-      <label className="inline-flex aspect-square size-32 cursor-pointer items-center justify-center overflow-hidden rounded-full border-4 border-white bg-card shadow-[0_8px_30px_rgba(30,26,21,0.12)]">
+      <label className="inline-flex aspect-square size-32 cursor-pointer items-center justify-center overflow-hidden rounded-full bg-card shadow-lux ring-4 ring-gold/25">
         {src ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={src} alt="" className="h-full w-full object-cover" />
@@ -247,9 +247,11 @@ function Kitchen({
 
   return (
     <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-10 sm:px-6">
-      <section className="rounded-3xl border border-line bg-card p-5 shadow-[0_8px_30px_rgba(30,26,21,0.08)] sm:p-8">
+      <section className="overflow-hidden rounded-3xl border border-line bg-card shadow-lux">
+        <div className="h-20 bg-gradient-to-l from-gold/25 via-surface to-terracotta/10" />
+        <div className="p-5 sm:px-8 sm:pb-8">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="text-sm font-medium text-olive">{kitchen ?? t("chef.kitchenFallback")}</p>
+          <p className="text-sm font-bold text-gold-deep">{kitchen ?? t("chef.kitchenFallback")}</p>
           <div className="flex items-center gap-3">
             <LiveDot />
             <button type="button" className={quietButtonClass} onClick={() => void logout()}>
@@ -277,9 +279,10 @@ function Kitchen({
         <p className="mt-1 text-base text-terracotta">{city || "—"}</p>
         {editingProfile ? <ProfileExtras role="chef" onSaved={onAvatarSaved} /> : null}
         <WalletPanel />
+        </div>
       </section>
 
-      <section className="mt-8 rounded-3xl border border-line bg-card p-5 shadow-[0_8px_30px_rgba(30,26,21,0.08)]">
+      <section className="mt-8 rounded-3xl border border-line bg-card p-5 shadow-lux">
         <div className="mb-4 flex items-center gap-3">
           <ProfilePhoto src={avatar} label={userName} />
           <h2 className="font-display text-3xl">{t("chef.cookingTitle")}</h2>
@@ -287,7 +290,7 @@ function Kitchen({
         <form onSubmit={publish} className="space-y-3">
           <label className="block text-sm">
             <span className="mb-1.5 block font-medium">{t("chef.photo")}</span>
-            <span className="flex min-h-52 cursor-pointer flex-col items-center justify-center overflow-hidden rounded-3xl border border-dashed border-[#B85C3E]/50 bg-[#B85C3E]/10 px-4 py-6 text-center">
+            <span className="flex min-h-52 cursor-pointer flex-col items-center justify-center overflow-hidden rounded-3xl border border-dashed border-terracotta/40 bg-terracotta/5 px-4 py-6 text-center">
               {preview.length > 0 ? (
                 <span className="mb-3 grid w-full grid-cols-3 gap-2">
                   {preview.map((src) => (
@@ -298,7 +301,7 @@ function Kitchen({
                   ))}
                 </span>
               ) : (
-                <span className="mb-2 inline-flex size-12 items-center justify-center rounded-2xl bg-[#B85C3E] text-[#FAF6EF]" aria-hidden="true">
+                <span className="mb-2 inline-flex size-12 items-center justify-center rounded-2xl bg-gradient-to-l from-gold to-gold-deep text-white shadow-[0_8px_20px_-8px_rgba(169,127,44,0.8)]" aria-hidden="true">
                   <svg viewBox="0 0 24 24" className="size-6" fill="none" stroke="currentColor" strokeWidth="1.6">
                     <path d="M4 16l4.5-4.5a2 2 0 012.8 0L16 16" />
                     <rect x="3" y="4" width="18" height="16" rx="2" />

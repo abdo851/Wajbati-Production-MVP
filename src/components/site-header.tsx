@@ -10,18 +10,24 @@ import { useSession } from "@/components/use-session";
 
 function Mark() {
   return (
-    <svg viewBox="0 0 40 40" className="size-9 drop-shadow-[0_4px_20px_rgba(30,26,21,0.08)]" aria-hidden="true">
-      <rect width="40" height="40" rx="14" className="fill-terracotta" />
+    <svg viewBox="0 0 40 40" className="size-9 drop-shadow-[0_6px_18px_rgba(169,127,44,0.35)]" aria-hidden="true">
+      <defs>
+        <linearGradient id="wajbati-mark-gold" x1="0" y1="0" x2="40" y2="40" gradientUnits="userSpaceOnUse">
+          <stop offset="0" stopColor="#DDB964" />
+          <stop offset="1" stopColor="#A97F2C" />
+        </linearGradient>
+      </defs>
+      <rect width="40" height="40" rx="14" fill="url(#wajbati-mark-gold)" />
       <path d="M9 25c0-6.2 4.8-11 11-11s11 4.8 11 11v1.5H9V25z" className="fill-white" />
       <path d="M14 14.5c1.4-3.6 10.6-3.6 12 0" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" />
-      <circle cx="20" cy="8.5" r="1.5" className="fill-saffron" />
+      <circle cx="20" cy="8.5" r="1.5" className="fill-white" opacity="0.85" />
     </svg>
   );
 }
 
 export function ProfilePhoto({ src, label, className = "size-11" }: { src?: string | null; label: string; className?: string }) {
   return (
-    <span className={`inline-flex aspect-square shrink-0 items-center justify-center overflow-hidden rounded-full border border-line bg-[#F3EBE1] text-foreground shadow-[0_4px_20px_rgba(30,26,21,0.08)] ${className}`}>
+    <span className={`inline-flex aspect-square shrink-0 items-center justify-center overflow-hidden rounded-full border border-line bg-surface text-foreground shadow-[0_4px_20px_rgba(23,19,15,0.08)] ${className}`}>
       {src ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img src={src} alt="" className="h-full w-full object-cover" />
@@ -41,15 +47,15 @@ function MenuButton({ open, onClick }: { open: boolean; onClick: () => void }) {
   return (
     <button
       type="button"
-      className="inline-flex size-10 items-center justify-center rounded-full border border-line bg-card"
+      className="inline-flex size-10 items-center justify-center rounded-full border border-line bg-card/85 text-foreground transition duration-200 hover:border-gold/60 hover:bg-gold/5"
       aria-expanded={open}
       aria-label={t("menu.open")}
       onClick={onClick}
     >
       <span className="flex w-4 flex-col gap-1" aria-hidden="true">
-        <span className="h-0.5 rounded-full bg-foreground" />
-        <span className="h-0.5 rounded-full bg-foreground" />
-        <span className="h-0.5 rounded-full bg-foreground" />
+        <span className="h-0.5 rounded-full bg-current" />
+        <span className="h-0.5 rounded-full bg-current" />
+        <span className="h-0.5 rounded-full bg-current" />
       </span>
     </button>
   );
@@ -85,7 +91,7 @@ export function SiteHeader() {
 
   return (
     <>
-      <header className="sticky top-0 z-20 border-b border-line/80 bg-background/90 shadow-[0_1px_0_rgba(30,26,21,0.04)] backdrop-blur-md">
+      <header className="glass sticky top-0 z-20 border-b border-line/60 shadow-[0_1px_0_rgba(23,19,15,0.03)]">
         <div className="mx-auto flex h-14 max-w-6xl items-center gap-2 px-3 sm:px-5">
           {hideMenu ? <span className="size-10 shrink-0" /> : <MenuButton open={open} onClick={() => setOpen(true)} />}
           <Link href="/" className="flex min-w-0 items-center gap-2">
@@ -94,14 +100,14 @@ export function SiteHeader() {
           </Link>
           <div className="ms-auto flex items-center gap-1.5">
             {deskHref ? (
-              <Link href={deskHref} aria-label={t("header.profile")} className="inline-flex rounded-full">
+              <Link href={deskHref} aria-label={t("header.profile")} className="inline-flex rounded-full transition duration-200 hover:ring-4 hover:ring-gold/20">
                 <ProfilePhoto src={user?.avatarDataUrl} label={t("header.profile")} className="size-9" />
               </Link>
             ) : null}
             <PwaInstallButton />
             <LanguageMenu />
             {name && !deskHref ? (
-              <Link href="/account" className="hidden rounded-lg px-3 py-2 text-sm font-medium text-foreground md:inline">
+              <Link href="/account" className="hidden rounded-full px-3 py-2 text-sm font-semibold text-foreground transition hover:bg-gold/10 md:inline">
                 {name}
               </Link>
             ) : null}
@@ -117,12 +123,12 @@ export function SiteHeader() {
 export function SiteFooter() {
   const { t, lang } = useI18n();
   return (
-    <footer className="mt-auto border-t border-line">
+    <footer className="mt-auto border-t border-line/70">
       <div className="mx-auto flex max-w-6xl flex-col gap-2 px-4 py-6 text-base text-muted sm:flex-row sm:items-center sm:justify-between sm:px-6">
-        <p>{lang === "ar" ? "وجبتي" : "Wajbati"}</p>
+        <p className="font-display text-lg">{lang === "ar" ? "وجبتي" : "Wajbati"}</p>
         <p className="flex flex-wrap gap-3">
-          <Link href="/terms">{t("footer.terms")}</Link>
-          <Link href="/privacy">{t("footer.privacy")}</Link>
+          <Link href="/terms" className="transition hover:text-gold-deep">{t("footer.terms")}</Link>
+          <Link href="/privacy" className="transition hover:text-gold-deep">{t("footer.privacy")}</Link>
         </p>
         <p>{t("footer.note")}</p>
       </div>

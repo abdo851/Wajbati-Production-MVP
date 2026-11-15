@@ -51,7 +51,7 @@ export function EmailBanner() {
   }
 
   return (
-    <section className="bg-[#8C3E28] text-[#FAF6EF]">
+    <section className="bg-ink text-white">
       {visible ? (
         <form onSubmit={submit} className="mx-auto flex h-12 max-h-[60px] w-full max-w-6xl items-center gap-2 px-3">
           <p className="hidden min-w-0 max-w-[42%] truncate text-xs text-white sm:block">{error ?? t("banner.body")}</p>
@@ -65,7 +65,7 @@ export function EmailBanner() {
             aria-label={t("auth.email")}
             aria-invalid={error ? true : undefined}
           />
-          <button className="h-8 shrink-0 rounded-full bg-white px-3 text-xs font-semibold text-[#8C3E28]" type="submit">
+          <button className="h-8 shrink-0 rounded-full bg-gradient-to-l from-gold to-gold-deep px-3 text-xs font-bold text-white" type="submit">
             {t("banner.send")}
           </button>
           <button type="button" className="inline-flex size-8 shrink-0 items-center justify-center rounded-full text-lg leading-none text-white" aria-label={t("banner.dismiss")} onClick={dismiss}>

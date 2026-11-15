@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Fraunces, Noto_Naskh_Arabic, Outfit } from "next/font/google";
+import { Alexandria, Fraunces, Outfit } from "next/font/google";
 import { LanguageProvider } from "@/components/language";
 import { AppToaster } from "@/components/toaster";
 import "./globals.css";
@@ -14,17 +14,17 @@ const fraunces = Fraunces({
   variable: "--font-fraunces",
 });
 
-const naskh = Noto_Naskh_Arabic({
-  subsets: ["arabic"],
-  weight: ["500", "600", "700"],
-  variable: "--font-naskh",
+const alexandria = Alexandria({
+  subsets: ["arabic", "latin"],
+  weight: ["300", "400", "500", "600", "700", "800"],
+  variable: "--font-alexandria",
 });
 
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
-  themeColor: "#B85C3E",
+  themeColor: "#C8963C",
 };
 
 export const metadata: Metadata = {
@@ -54,7 +54,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     <html
       lang="ar"
       dir="rtl"
-      className={`${outfit.variable} ${fraunces.variable} ${naskh.variable} h-full antialiased`}
+      className={`${outfit.variable} ${fraunces.variable} ${alexandria.variable} h-full antialiased`}
     >
       <body className="flex min-h-dvh min-h-screen flex-col pt-safe pr-safe pb-safe pl-safe">
         <LanguageProvider initial="ar">{children}</LanguageProvider>

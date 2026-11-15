@@ -2,14 +2,17 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import { useI18n } from "@/components/language";
 import { ProfilePhoto } from "@/components/site-header";
 import { useSession } from "@/components/use-session";
 
 const NOTICE_KEY = "wajbati_notifications";
 
-const itemClass = "lift-card block w-full rounded-2xl px-4 py-3 text-start text-base";
-const nestedClass = "block w-full rounded-2xl border border-[#E4D5C4] bg-[#F3EBE1] px-4 py-3 text-start text-base";
+const itemClass =
+  "lift-card block w-full rounded-2xl px-4 py-3 text-start text-base transition duration-200 hover:border-gold/50";
+const nestedClass =
+  "block w-full rounded-2xl border border-line bg-surface/70 px-4 py-3 text-start text-base transition duration-200 hover:border-gold/50";
 
 export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { t, dir, openLanguage } = useI18n();
@@ -39,35 +42,49 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
     onClose();
   }
 
-  if (!open) return null;
-
   const fromStart = dir === "rtl" ? "right-0" : "left-0";
+  const slideFrom = dir === "rtl" ? "100%" : "-100%";
 
   return (
-    <div className="fixed inset-0 z-40">
-      <button type="button" className="absolute inset-0 bg-foreground/40" aria-label={t("order.close")} onClick={onClose} />
-      <aside
-        className={`absolute top-0 ${fromStart} flex h-full w-[min(100%,22rem)] flex-col overflow-y-auto bg-background p-5 shadow-[0_4px_20px_rgba(30,26,21,0.08)]`}
-        role="dialog"
-        aria-modal="true"
-        aria-label={t("menu.open")}
-      >
+    <AnimatePresence>
+      {open ? (
+        <div key="sidebar" className="fixed inset-0 z-40">
+          <motion.button
+            type="button"
+            className="absolute inset-0 bg-ink/45 backdrop-blur-sm"
+            aria-label={t("order.close")}
+            onClick={onClose}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+          />
+          <motion.aside
+            className={`absolute top-0 ${fromStart} flex h-full w-[min(100%,22rem)] flex-col overflow-y-auto border-line bg-background p-5 shadow-lux-lg`}
+            role="dialog"
+            aria-modal="true"
+            aria-label={t("menu.open")}
+            initial={{ x: slideFrom }}
+            animate={{ x: 0 }}
+            exit={{ x: slideFrom }}
+            transition={{ type: "spring", stiffness: 320, damping: 34 }}
+          >
         <div className="flex items-center justify-between">
           <p className="font-display text-2xl">{t("menu.open")}</p>
-          <button type="button" className="inline-flex size-11 items-center justify-center rounded-lg text-xl" onClick={onClose} aria-label={t("order.close")}>
+          <button type="button" className="inline-flex size-11 items-center justify-center rounded-full text-xl transition hover:bg-gold/10" onClick={onClose} aria-label={t("order.close")}>
             ×
           </button>
         </div>
 
         {user && (user.role === "chef" || user.role === "driver") ? (
           <div className="mt-6 grid gap-2">
-            <Link href={user.role === "chef" ? "/chef" : "/driver"} className={`${itemClass} font-medium`} onClick={onClose}>
+            <Link href={user.role === "chef" ? "/chef" : "/driver"} className={`${itemClass} font-semibold`} onClick={onClose}>
               {t("sidebar.myProfile")}
             </Link>
-            <Link href={user.role === "chef" ? "/chef#orders" : "/driver#orders"} className={`${itemClass} font-medium`} onClick={onClose}>
+            <Link href={user.role === "chef" ? "/chef#orders" : "/driver#orders"} className={`${itemClass} font-semibold`} onClick={onClose}>
               {t("menu.orders")}
             </Link>
-            <button type="button" className={`${itemClass} text-start font-medium`} onClick={() => void signOut()}>
+            <button type="button" className={`${itemClass} text-start font-semibold`} onClick={() => void signOut()}>
               {t("menu.signOut")}
             </button>
           </div>
@@ -76,23 +93,33 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
             <section className="mt-6">
               <button
                 type="button"
-                className={`${itemClass} flex items-center justify-between font-medium`}
+                className={`${itemClass} flex items-center justify-between font-semibold`}
                 aria-expanded={joinOpen}
                 onClick={() => setJoinOpen((current) => !current)}
               >
                 <span>{t("sidebar.join")}</span>
-                <span aria-hidden="true">{joinOpen ? "–" : "+"}</span>
+                <motion.span aria-hidden="true" animate={{ rotate: joinOpen ? 45 : 0 }} transition={{ duration: 0.18 }}>
+                  +
+                </motion.span>
               </button>
-              {joinOpen ? (
-                <div className="mt-2 grid gap-2">
-                  <Link href="/chef" className={nestedClass} onClick={onClose}>
-                    {t("sidebar.chef")}
-                  </Link>
-                  <Link href="/driver" className={nestedClass} onClick={onClose}>
-                    {t("sidebar.driver")}
-                  </Link>
-                </div>
-              ) : null}
+              <AnimatePresence initial={false}>
+                {joinOpen ? (
+                  <motion.div
+                    className="mt-2 grid gap-2 overflow-hidden"
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: "auto", opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+                  >
+                    <Link href="/chef" className={nestedClass} onClick={onClose}>
+                      {t("sidebar.chef")}
+                    </Link>
+                    <Link href="/driver" className={nestedClass} onClick={onClose}>
+                      {t("sidebar.driver")}
+                    </Link>
+                  </motion.div>
+                ) : null}
+              </AnimatePresence>
             </section>
 
             <section className="mt-4">
@@ -100,36 +127,46 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
                 <>
                   <button
                     type="button"
-                    className={`${itemClass} flex items-center justify-between font-medium`}
+                    className={`${itemClass} flex items-center justify-between font-semibold`}
                     aria-expanded={accountOpen}
                     onClick={() => setAccountOpen((current) => !current)}
                   >
                     <span>{t("sidebar.account")}</span>
-                    <span aria-hidden="true">{accountOpen ? "–" : "+"}</span>
+                    <motion.span aria-hidden="true" animate={{ rotate: accountOpen ? 45 : 0 }} transition={{ duration: 0.18 }}>
+                      +
+                    </motion.span>
                   </button>
-                  {accountOpen ? (
-                    <div className="mt-2 grid gap-2">
-                      <Link href="/account" className={nestedClass} onClick={onClose}>
-                        {t("menu.account")}
-                      </Link>
-                      <Link href="/account#orders" className={nestedClass} onClick={onClose}>
-                        {t("menu.orders")}
-                      </Link>
-                      <button type="button" className={nestedClass} onClick={() => void signOut()}>
-                        {t("menu.signOut")}
-                      </button>
-                    </div>
-                  ) : null}
+                  <AnimatePresence initial={false}>
+                    {accountOpen ? (
+                      <motion.div
+                        className="mt-2 grid gap-2 overflow-hidden"
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: "auto", opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+                      >
+                        <Link href="/account" className={nestedClass} onClick={onClose}>
+                          {t("menu.account")}
+                        </Link>
+                        <Link href="/account#orders" className={nestedClass} onClick={onClose}>
+                          {t("menu.orders")}
+                        </Link>
+                        <button type="button" className={nestedClass} onClick={() => void signOut()}>
+                          {t("menu.signOut")}
+                        </button>
+                      </motion.div>
+                    ) : null}
+                  </AnimatePresence>
                 </>
               ) : (
-                <Link href="/account" className={`${itemClass} font-medium`} onClick={onClose}>
+                <Link href="/account" className={`${itemClass} font-semibold`} onClick={onClose}>
                   {t("sidebar.account")}
                 </Link>
               )}
             </section>
 
             <section className="mt-6">
-              <h2 className="px-1 text-sm font-medium text-muted">{t("sidebar.settings")}</h2>
+              <h2 className="px-1 text-sm font-semibold text-muted">{t("sidebar.settings")}</h2>
               <div className="mt-2 grid gap-2">
                 <button
                   type="button"
@@ -157,7 +194,7 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
             </section>
 
             <section className="mt-6">
-              <h2 className="px-1 text-sm font-medium text-muted">{t("sidebar.legal")}</h2>
+              <h2 className="px-1 text-sm font-semibold text-muted">{t("sidebar.legal")}</h2>
               <div className="mt-2 grid gap-2">
                 <Link href="/terms" className={itemClass} onClick={onClose}>
                   {t("sidebar.terms")}
@@ -174,11 +211,13 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
           {user ? (
             <div className="flex items-center gap-3">
               <ProfilePhoto src={user.avatarDataUrl} label={user.fullName} className="size-12" />
-              <p className="min-w-0 truncate font-medium">{user.fullName}</p>
+              <p className="min-w-0 truncate font-semibold">{user.fullName}</p>
             </div>
           ) : null}
         </footer>
-      </aside>
-    </div>
+          </motion.aside>
+        </div>
+      ) : null}
+    </AnimatePresence>
   );
 }

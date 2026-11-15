@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
+import { AnimatePresence, motion } from "framer-motion";
 import { DELIVERY_FEE_MAD } from "@/lib/constants";
 import { addCasablancaDays, formatMad, formatServiceDate, formatWhen } from "@/lib/format";
 import { readJson } from "@/lib/read-json";
@@ -61,7 +62,7 @@ export function MealBoard() {
           <button
             key={id}
             type="button"
-            className={`min-h-10 rounded-full px-4 text-sm font-medium ${range === id ? "bg-terracotta text-white" : "border border-line bg-card"}`}
+            className={`min-h-10 rounded-full px-4 text-sm font-semibold transition duration-200 ${range === id ? "bg-gradient-to-l from-gold to-gold-deep text-white shadow-[0_8px_20px_-8px_rgba(169,127,44,0.7)]" : "border border-line bg-card text-foreground hover:border-gold/50 hover:bg-gold/5"}`}
             onClick={() => setRange(id)}
           >
             {label}
@@ -78,10 +79,11 @@ export function MealBoard() {
         <p className="lift-card mt-8 rounded-3xl px-5 py-10 text-center text-base text-muted">{t("board.empty")}</p>
       ) : null}
       <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4">
-        {meals.map((meal) => (
+        {meals.map((meal, index) => (
           <MealCard
             key={meal.id}
             meal={meal}
+            index={index}
             canOrder={canOrder}
             onOrder={(next) => {
               if (!canOrder || window.localStorage.getItem("wajbati_terms_accepted") !== "true") return;
@@ -90,54 +92,72 @@ export function MealBoard() {
           />
         ))}
       </div>
-      {currentMeal ? (
-        <OrderDialog
-          key={currentMeal.id}
-          meal={currentMeal}
-          onClose={() => setSelected(null)}
-          onPlaced={() => void reload()}
-        />
-      ) : null}
+      <AnimatePresence>
+        {currentMeal ? (
+          <OrderDialog
+            key={currentMeal.id}
+            meal={currentMeal}
+            onClose={() => setSelected(null)}
+            onPlaced={() => void reload()}
+          />
+        ) : null}
+      </AnimatePresence>
     </section>
   );
 }
 
-function MealCard({ meal, canOrder, onOrder }: { meal: PublicMeal; canOrder: boolean; onOrder: (meal: PublicMeal) => void }) {
+function MealCard({ meal, index, canOrder, onOrder }: { meal: PublicMeal; index: number; canOrder: boolean; onOrder: (meal: PublicMeal) => void }) {
   const { t, lang } = useI18n();
   const soldOut = meal.remainingQuantity <= 0;
   const photos = meal.photoUrls?.length ? meal.photoUrls : meal.photoUrl ? [meal.photoUrl] : [];
-  const [index, setIndex] = useState(0);
-  const photo = photos[index] ?? null;
+  const [indexPhoto, setIndexPhoto] = useState(0);
+  const photo = photos[indexPhoto] ?? null;
 
   return (
-    <article className="flex flex-col overflow-hidden rounded-xl border border-[#E7E0D6] bg-card shadow-[0_1px_2px_rgba(30,26,21,0.06),0_10px_24px_-18px_rgba(30,26,21,0.45)]">
-      <div className="relative aspect-square w-full overflow-hidden bg-[#F3EBE1]">
+    <motion.article
+      initial={{ opacity: 0, y: 26, scale: 0.97 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      transition={{ duration: 0.45, delay: Math.min(index * 0.06, 0.4), ease: [0.22, 1, 0.36, 1] }}
+      whileHover={{ y: -6 }}
+      whileTap={{ scale: 0.98 }}
+      className="group flex flex-col overflow-hidden rounded-3xl border border-line bg-card shadow-lux transition-shadow duration-300 hover:shadow-lux-lg"
+    >
+      <div className="relative aspect-square w-full overflow-hidden bg-surface">
         {photo ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={photo} alt="" className="h-full w-full object-cover" />
+          <img
+            src={photo}
+            alt=""
+            className="h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-110"
+          />
         ) : (
-          <span className="flex h-full items-center justify-center text-3xl text-[#C4B6A6]" aria-hidden="true">🍽</span>
+          <span className="flex h-full items-center justify-center text-3xl text-muted/40" aria-hidden="true">🍽</span>
         )}
+        {soldOut ? (
+          <span className="absolute inset-0 flex items-center justify-center bg-ink/45 backdrop-blur-[2px]">
+            <span className="rounded-full bg-white/90 px-4 py-1.5 text-sm font-bold text-ink">{t("board.soldOut")}</span>
+          </span>
+        ) : null}
         {photos.length > 1 ? (
-          <span className="absolute inset-x-2 bottom-2 flex justify-between">
-            <button type="button" className="size-7 rounded-full bg-white/90 text-sm" onClick={() => setIndex((current) => (current - 1 + photos.length) % photos.length)} aria-label={t("board.lastDays")}>‹</button>
-            <button type="button" className="size-7 rounded-full bg-white/90 text-sm" onClick={() => setIndex((current) => (current + 1) % photos.length)} aria-label={t("board.lastDays")}>›</button>
+          <span className="absolute inset-x-2 bottom-2 flex justify-between opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+            <button type="button" className="size-7 rounded-full bg-white/90 text-sm shadow transition hover:scale-110" onClick={() => setIndexPhoto((current) => (current - 1 + photos.length) % photos.length)} aria-label={t("board.lastDays")}>‹</button>
+            <button type="button" className="size-7 rounded-full bg-white/90 text-sm shadow transition hover:scale-110" onClick={() => setIndexPhoto((current) => (current + 1) % photos.length)} aria-label={t("board.lastDays")}>›</button>
           </span>
         ) : null}
       </div>
-      <div className="flex flex-1 flex-col gap-1 p-2.5">
-        <h3 className="line-clamp-2 min-h-10 text-sm font-medium leading-5 text-foreground">{meal.title}</h3>
+      <div className="flex flex-1 flex-col gap-1 p-3">
+        <h3 className="line-clamp-2 min-h-10 text-sm font-semibold leading-5 text-foreground">{meal.title}</h3>
         {meal.chefId ? (
-          <Link href={`/chef/${meal.chefId}`} className="truncate text-xs text-terracotta-deep underline">
+          <Link href={`/chef/${meal.chefId}`} className="truncate text-xs font-medium text-gold-deep underline-offset-2 hover:underline">
             {meal.kitchenName}
           </Link>
         ) : (
           <p className="truncate text-xs text-muted">{meal.kitchenName}</p>
         )}
-        <p className="text-sm font-semibold text-foreground">{formatMad(meal.priceMad, lang)}</p>
+        <p className="text-base font-bold text-foreground">{formatMad(meal.priceMad, lang)}</p>
         <button
           type="button"
-          className="mt-auto inline-flex h-8 items-center justify-center rounded-full bg-[#D89B3D] px-3 text-xs font-semibold text-[#1E1A15] disabled:bg-[#E7E0D6] disabled:text-muted"
+          className="mt-auto inline-flex h-9 items-center justify-center rounded-full bg-gradient-to-l from-gold to-gold-deep px-3 text-xs font-bold text-white shadow-[0_8px_18px_-8px_rgba(169,127,44,0.7)] transition duration-200 hover:brightness-105 active:scale-[0.97] disabled:from-line disabled:to-line disabled:text-muted disabled:shadow-none"
           disabled={soldOut || !canOrder}
           onClick={() => onOrder(meal)}
         >
@@ -145,7 +165,7 @@ function MealCard({ meal, canOrder, onOrder }: { meal: PublicMeal; canOrder: boo
         </button>
         {!canOrder ? <p className="text-[11px] leading-4 text-terracotta-deep">{t("meal.pastOrder")}</p> : null}
       </div>
-    </article>
+    </motion.article>
   );
 }
 
@@ -252,20 +272,28 @@ function OrderDialog({
   const deliveryTotal = remaining > 0 ? DELIVERY_FEE_MAD : 0;
 
   return (
-    <div
-      className="fixed inset-0 z-[60] flex items-center justify-center bg-[#1E1A15]/45 p-3 backdrop-blur-md sm:p-6"
+    <motion.div
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-ink/50 p-3 backdrop-blur-md sm:p-6"
       onClick={onClose}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.2 }}
     >
-      <div
+      <motion.div
         role="dialog"
         aria-modal="true"
         aria-labelledby="order-title"
-        className="flex max-h-[min(92dvh,44rem)] w-full max-w-lg flex-col overflow-hidden rounded-3xl border border-line bg-card shadow-[0_12px_40px_rgba(30,26,21,0.18)]"
+        className="flex max-h-[min(92dvh,44rem)] w-full max-w-lg flex-col overflow-hidden rounded-3xl border border-line/70 bg-card/95 shadow-lux-lg backdrop-blur-xl"
         onClick={(event) => event.stopPropagation()}
+        initial={{ opacity: 0, scale: 0.94, y: 24 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.96, y: 16 }}
+        transition={{ type: "spring", stiffness: 340, damping: 30 }}
       >
         <div className="flex items-start justify-between gap-3 px-5 pt-5">
           <div className="min-w-0">
-            <p className="text-sm text-terracotta">{meal.kitchenName}</p>
+            <p className="text-sm font-semibold text-gold-deep">{meal.kitchenName}</p>
             <p className="text-sm text-olive">{t("chef.rating")}</p>
             <h2 id="order-title" className="mt-1 font-display text-3xl">
               {meal.title}
@@ -290,14 +318,14 @@ function OrderDialog({
         ) : receipt ? (
           <div className="mt-4 space-y-4 overflow-y-auto px-5 pb-5 text-base leading-7">
             {meal.photoUrl ? (
-              <div className="aspect-video w-full overflow-hidden rounded-lg">
+              <div className="aspect-video w-full overflow-hidden rounded-2xl">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={meal.photoUrl} alt="" className="h-full w-full rounded-lg object-cover" />
+                <img src={meal.photoUrl} alt="" className="h-full w-full rounded-2xl object-cover" />
               </div>
             ) : null}
             <p className="text-base leading-7 text-muted">{meal.description}</p>
-            <div className="space-y-4 rounded-2xl bg-background p-4">
-            <p className="font-medium text-olive">{t("order.placed")}</p>
+            <div className="space-y-4 rounded-2xl bg-surface/70 p-4">
+            <p className="font-semibold text-olive">{t("order.placed")}</p>
             <p>{t("order.for", { quantity: receipt.quantity, meal: receipt.mealTitle, name: receipt.customerName })}</p>
             <p>{t("order.deliverTo", { address: receipt.deliveryAddress })}</p>
             <p>
@@ -308,7 +336,7 @@ function OrderDialog({
               })}
             </p>
             {receipt.customerNotes ? <p className="text-muted">{receipt.customerNotes}</p> : null}
-            <div className="rounded-3xl bg-card px-4 py-5 text-center">
+            <div className="rounded-3xl bg-card px-4 py-5 text-center shadow-lux">
               <p className="text-base text-muted">{t("track.codeLabel")}</p>
               <p className="mt-2 font-display text-5xl tracking-[0.28em]">{receipt.deliveryCode}</p>
               <p className="mt-3 text-base leading-7 text-muted">{t("track.hint")}</p>
@@ -320,10 +348,10 @@ function OrderDialog({
             {emailState === "saved" ? <p className="text-olive">{t("order.emailSaved")}</p> : null}
             {emailState === "ask" || emailState === "saving" ? (
               <form onSubmit={saveEmail} className="space-y-3 border-t border-line pt-4">
-                <p className="font-medium">{t("order.emailTitle")}</p>
+                <p className="font-semibold">{t("order.emailTitle")}</p>
                 <p className="text-muted">{t("order.emailHint")}</p>
                 <label className="block">
-                  <span className="mb-1.5 block font-medium">{t("order.email")}</span>
+                  <span className="mb-1.5 block font-semibold">{t("order.email")}</span>
                   <input className={inputClass} type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} required />
                 </label>
                 {error ? <p className="text-terracotta-deep">{error}</p> : null}
@@ -343,9 +371,9 @@ function OrderDialog({
           <form onSubmit={submit} className="mt-4 flex min-h-0 flex-1 flex-col">
             <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-5 pb-4">
             {meal.photoUrl ? (
-              <div className="aspect-video w-full overflow-hidden rounded-lg">
+              <div className="aspect-video w-full overflow-hidden rounded-2xl">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={meal.photoUrl} alt="" className="h-full w-full rounded-lg object-cover" />
+                <img src={meal.photoUrl} alt="" className="h-full w-full rounded-2xl object-cover" />
               </div>
             ) : null}
             <p className="text-base leading-7 text-muted">{meal.description}</p>
@@ -353,19 +381,19 @@ function OrderDialog({
               {t("order.left", { count: remaining, price: formatMad(meal.priceMad, lang) })}
             </p>
             <label className="block text-base">
-              <span className="mb-1.5 block font-medium">{t("order.name")}</span>
+              <span className="mb-1.5 block font-semibold">{t("order.name")}</span>
               <input className={inputClass} autoComplete="name" value={name} onChange={(event) => setName(event.target.value)} required />
             </label>
             <label className="block text-base">
-              <span className="mb-1.5 block font-medium">{t("order.phone")}</span>
+              <span className="mb-1.5 block font-semibold">{t("order.phone")}</span>
               <input className={inputClass} autoComplete="tel" inputMode="tel" value={phone} onChange={(event) => setPhone(event.target.value)} required />
             </label>
             <label className="block text-base">
-              <span className="mb-1.5 block font-medium">{t("order.address")}</span>
+              <span className="mb-1.5 block font-semibold">{t("order.address")}</span>
               <input className={inputClass} autoComplete="street-address" value={address} onChange={(event) => setAddress(event.target.value)} required />
             </label>
             <label className="block text-base">
-              <span className="mb-1.5 block font-medium">{t("order.notes")}</span>
+              <span className="mb-1.5 block font-semibold">{t("order.notes")}</span>
               <textarea
                 className={`${inputClass} min-h-24 resize-y`}
                 value={notes}
@@ -375,7 +403,7 @@ function OrderDialog({
               />
             </label>
             <div className="flex items-center justify-between gap-3">
-              <span className="text-base font-medium">{t("order.quantity")}</span>
+              <span className="text-base font-semibold">{t("order.quantity")}</span>
               <div className="flex items-center gap-2">
                 <button type="button" className={quietButtonClass} onClick={() => setQuantity((value) => Math.max(1, value - 1))} disabled={safeQuantity <= 1}>
                   {t("order.less")}
@@ -387,21 +415,21 @@ function OrderDialog({
               </div>
             </div>
             <fieldset className="space-y-2">
-              <legend className="text-base font-medium">{t("order.payTitle")}</legend>
+              <legend className="text-base font-semibold">{t("order.payTitle")}</legend>
               <label className="lift-card flex items-start gap-3 rounded-2xl p-3">
                 <input type="radio" name="payment" checked readOnly className="mt-1" />
                 <span>
-                  <span className="block font-medium">{t("order.cash")}</span>
+                  <span className="block font-semibold">{t("order.cash")}</span>
                   <span className="block text-muted">{t("order.cashHint")}</span>
                 </span>
               </label>
             </fieldset>
             <p className="text-base">
-              {t("order.meal")} <span className="font-medium">{formatMad(mealTotal, lang)}</span>
+              {t("order.meal")} <span className="font-semibold">{formatMad(mealTotal, lang)}</span>
               {" · "}
-              {t("order.delivery")} <span className="font-medium">{formatMad(deliveryTotal, lang)}</span>
+              {t("order.delivery")} <span className="font-semibold">{formatMad(deliveryTotal, lang)}</span>
               {" · "}
-              {t("order.toPay")} <span className="font-medium">{formatMad(mealTotal + deliveryTotal, lang)}</span>
+              {t("order.toPay")} <span className="font-semibold">{formatMad(mealTotal + deliveryTotal, lang)}</span>
             </p>
             {error ? (
               <p role="alert" className="text-base text-terracotta-deep">
@@ -410,23 +438,23 @@ function OrderDialog({
             ) : null}
             <p className="text-sm leading-6 text-muted">
               {t("order.disclaimer")}{" "}
-              <Link href="/terms" className="font-medium text-terracotta-deep underline">
+              <Link href="/terms" className="font-semibold text-gold-deep underline underline-offset-2">
                 {t("footer.terms")}
               </Link>
               {" · "}
-              <Link href="/privacy" className="font-medium text-terracotta-deep underline">
+              <Link href="/privacy" className="font-semibold text-gold-deep underline underline-offset-2">
                 {t("footer.privacy")}
               </Link>
             </p>
             </div>
-            <div className="sticky bottom-0 border-t border-line bg-card/95 px-5 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-md">
+            <div className="sticky bottom-0 border-t border-line/70 bg-card/90 px-5 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-md">
               <button className={`${primaryButtonClass} w-full`} type="submit" disabled={pending || remaining < 1}>
                 {remaining < 1 ? t("board.soldOut") : pending ? t("order.placing") : t("order.place")}
               </button>
             </div>
           </form>
         )}
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 }

@@ -1,15 +1,19 @@
 @import "tailwindcss";
 
 :root {
-  --background: #faf6ef;
-  --foreground: #1e1a15;
+  --background: #f6f4f1;
+  --foreground: #1b1611;
   --card: #ffffff;
-  --muted: #7a6f63;
-  --line: #eae3d8;
-  --terracotta: #b85c3e;
-  --terracotta-deep: #8c3e28;
-  --saffron: #d89b3d;
-  --olive: #5e7a4b;
+  --muted: #8b8177;
+  --line: #e8e2da;
+  --terracotta: #a44e32;
+  --terracotta-deep: #7e3722;
+  --saffron: #c8963c;
+  --olive: #5c7250;
+  --gold: #c9a24b;
+  --gold-deep: #a97f2c;
+  --surface: #efece7;
+  --ink: #17130f;
 }
 
 @utility pt-safe {
@@ -28,6 +32,38 @@
   padding-right: env(safe-area-inset-right);
 }
 
+@utility glass {
+  background: rgb(255 255 255 / 0.72);
+  backdrop-filter: blur(18px) saturate(1.5);
+  -webkit-backdrop-filter: blur(18px) saturate(1.5);
+  border: 1px solid rgb(255 255 255 / 0.65);
+}
+
+@utility glass-dark {
+  background: rgb(23 19 15 / 0.42);
+  backdrop-filter: blur(14px) saturate(1.2);
+  -webkit-backdrop-filter: blur(14px) saturate(1.2);
+}
+
+@utility gold-text {
+  background: linear-gradient(120deg, #e3c169 0%, #c8963c 45%, #a97f2c 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+@utility shadow-lux {
+  box-shadow:
+    0 1px 2px rgb(23 19 15 / 0.05),
+    0 20px 48px -24px rgb(23 19 15 / 0.22);
+}
+
+@utility shadow-lux-lg {
+  box-shadow:
+    0 2px 4px rgb(23 19 15 / 0.05),
+    0 32px 72px -32px rgb(23 19 15 / 0.3);
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -38,22 +74,47 @@
   --color-terracotta-deep: var(--terracotta-deep);
   --color-saffron: var(--saffron);
   --color-olive: var(--olive);
+  --color-gold: var(--gold);
+  --color-gold-deep: var(--gold-deep);
+  --color-surface: var(--surface);
+  --color-ink: var(--ink);
   --font-sans: var(--font-outfit), ui-sans-serif, system-ui, sans-serif;
   --font-display: var(--font-fraunces), Georgia, serif;
-  --font-arabic: var(--font-naskh), "Noto Naskh Arabic", serif;
+  --font-arabic: var(--font-alexandria), var(--font-outfit), ui-sans-serif, sans-serif;
 }
 
 body {
   background:
-    radial-gradient(1000px 420px at 0% -10%, rgb(216 155 61 / 18%), transparent 55%),
-    radial-gradient(800px 380px at 100% 0%, rgb(184 92 62 / 10%), transparent 46%),
-    var(--background);
+    radial-gradient(1100px 460px at 85% -12%, rgb(201 162 75 / 14%), transparent 58%),
+    radial-gradient(900px 420px at -5% 0%, rgb(164 78 50 / 8%), transparent 50%),
+    linear-gradient(180deg, #f8f6f3 0%, var(--background) 42%);
+  background-attachment: fixed;
   color: var(--foreground);
   font-family: var(--font-sans);
 }
 
 ::selection {
-  background: #f0c9b4;
+  background: #ebd9ae;
+  color: var(--ink);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #d9d1c3 transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: #d9d1c3;
+  border-radius: 999px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 dialog {
@@ -65,18 +126,19 @@ dialog {
 }
 
 dialog::backdrop {
-  background: rgb(28 22 18 / 48%);
+  background: rgb(23 19 15 / 52%);
+  backdrop-filter: blur(6px);
 }
 
 html[lang="ar"] body {
   font-family: var(--font-arabic);
-  font-size: 1.125rem;
+  font-size: 1.0625rem;
   line-height: 1.75;
 }
 
 html[lang="ar"] .font-display {
   font-family: var(--font-arabic);
-  font-weight: 700;
+  font-weight: 800;
   letter-spacing: 0;
 }
 
@@ -84,21 +146,25 @@ html[lang="ar"] .font-display {
   display: flex;
   min-height: 100dvh;
   background:
-    radial-gradient(900px 420px at 8% -10%, rgb(226 161 34 / 32%), transparent 55%),
-    radial-gradient(720px 380px at 100% 0%, rgb(196 82 42 / 18%), transparent 48%),
-    linear-gradient(180deg, #fbf6ee 0%, #f4e7d6 100%);
+    radial-gradient(1000px 460px at 88% -12%, rgb(201 162 75 / 26%), transparent 58%),
+    radial-gradient(760px 400px at 0% 0%, rgb(164 78 50 / 14%), transparent 50%),
+    linear-gradient(180deg, #faf8f5 0%, #f1ece5 100%);
 }
 
 .lift-card {
   border: 1px solid var(--line);
   background: var(--card);
-  box-shadow: 0 4px 20px rgba(30, 26, 21, 0.08);
-  transition: transform 180ms ease, box-shadow 180ms ease;
+  box-shadow:
+    0 1px 2px rgb(23 19 15 / 0.05),
+    0 16px 40px -20px rgb(23 19 15 / 0.18);
+  transition: transform 200ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 200ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .lift-card:hover {
   transform: translateY(-4px);
-  box-shadow: 0 8px 24px rgba(30, 26, 21, 0.12);
+  box-shadow:
+    0 2px 4px rgb(23 19 15 / 0.05),
+    0 26px 56px -22px rgb(23 19 15 / 0.26);
 }
 
 @media (prefers-reduced-motion: reduce) {
