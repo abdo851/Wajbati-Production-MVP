@@ -10,8 +10,10 @@ export default function SiteLayout({ children }: { children: ReactNode }) {
       <Suspense fallback={<div className="h-16 border-b border-line/80 bg-background/80" />}>
         <SiteHeader />
       </Suspense>
-      <div className="flex-1 pb-20 md:pb-0">{children}</div>
-      <SiteFooter />
+      <div className="flex-1 pb-24 md:pb-0">
+        {children}
+        <SiteFooter />
+      </div>
       <Suspense fallback={null}>
         <BottomNav />
       </Suspense>

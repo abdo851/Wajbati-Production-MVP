@@ -1108,6 +1108,8 @@ function toJob(db: Database, order: Order): DeliveryJob {
     customerName: order.customerName,
     customerPhone: order.customerPhone,
     deliveryAddress: order.deliveryAddress,
+    deliveryLat: order.deliveryLat ?? null,
+    deliveryLng: order.deliveryLng ?? null,
     quantity: order.quantity,
     status: order.status,
     deliveryFeeMad: order.deliveryFeeMad,
@@ -1188,6 +1190,25 @@ export async function findLocalCustomerByEmail(email: string): Promise<AuthUser 
     );
     return profile ? mapUser(db, profile) : null;
   }, false);
+}
+
+export async function updateLocalAdminCredentials(
+  userId: string,
+  changes: { email?: string; password?: string },
+): Promise<void> {
+  return withDb((db) => {
+    const profile = db.profiles.find((item) => item.id === userId && item.role === "admin");
+    if (!profile) throw new StoreError("That admin account could not be found.", 404);
+    const email = changes.email?.trim().toLowerCase();
+    if (email) {
+      const taken = db.profiles.some((item) => item.id !== userId && item.email.toLowerCase() === email);
+      if (taken) throw new StoreError("That email is already in use.", 409);
+      profile.email = email;
+    }
+    if (changes.password) {
+      profile.passwordHash = hashPassword(changes.password);
+    }
+  }, true);
 }
 
 export async function authenticateLocalDriver(identifier: string, password: string): Promise<AuthUser | null> {

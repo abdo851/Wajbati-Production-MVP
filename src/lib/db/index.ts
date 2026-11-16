@@ -5,6 +5,7 @@ import {
   findLocalGoogle,
   findLocalUser,
   findLocalCustomerByEmail,
+  updateLocalAdminCredentials,
   localRepository,
   confirmLocalEmail,
   registerLocalChef,
@@ -59,6 +60,13 @@ export async function findUser(userId: string, accessToken?: string) {
 export async function findCustomerByEmail(email: string) {
   if (dataProvider() === "supabase") return null;
   return findLocalCustomerByEmail(email);
+}
+
+export async function updateAdminCredentials(userId: string, changes: { email?: string; password?: string }) {
+  if (dataProvider() === "supabase") {
+    throw new Error("Admin credential updates are not available in Supabase mode yet.");
+  }
+  return updateLocalAdminCredentials(userId, changes);
 }
 
 export async function authenticateDriver(identifier: string, password: string) {

@@ -340,6 +340,8 @@ export type DeliveryJob = {
   customerName: string;
   customerPhone: string;
   deliveryAddress: string;
+  deliveryLat?: number | null;
+  deliveryLng?: number | null;
   quantity: number;
   status: OrderStatus;
   deliveryFeeMad: number;

@@ -4,6 +4,10 @@ import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
 import { DocumentUpload } from "@/components/document-upload";
 import { ProfileEditModal } from "@/components/profile-edit-modal";
+import dynamic from "next/dynamic";
+import { cityCenter } from "@/lib/geo";
+
+const DispatchMapDialog = dynamic(() => import("@/components/dispatch-map-dialog").then((mod) => mod.DispatchMapDialog), { ssr: false });
 import { DriverAuth } from "@/components/driver-auth";
 import { PhotoGallery, PenButton } from "@/components/photo-gallery";
 import { ProfilePhoto } from "@/components/site-header";
@@ -297,6 +301,9 @@ function Earnings({ board }: { board: DriverBoard }) {
 
 function JobCard({ job, children }: { job: DeliveryJob; children?: ReactNode }) {
   const { t } = useI18n();
+  const [mapOpen, setMapOpen] = useState(false);
+  const pickup = cityCenter(job.city);
+  const drop = typeof job.deliveryLat === "number" && typeof job.deliveryLng === "number" ? { lat: job.deliveryLat, lng: job.deliveryLng } : null;
   return (
     <li className="rounded-3xl border border-line bg-card p-4">
       <div className="flex items-start justify-between gap-3">
@@ -332,7 +339,28 @@ function JobCard({ job, children }: { job: DeliveryJob; children?: ReactNode }) 
       <p className="mt-2 text-sm">
         {t("driver.feeLine", { fee: formatMad(job.deliveryFeeMad), commission: formatMad(job.driverCommissionMad), net: formatMad(job.driverNetMad) })}
       </p>
+      <div className="mt-3">
+        <button type="button" className={quietButtonClass} onClick={() => setMapOpen(true)}>
+          <span className="inline-flex items-center gap-1.5">
+            <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+              <path d="M12 21s-7-5.1-7-11a7 7 0 1 1 14 0c0 5.9-7 11-7 11z" />
+              <circle cx="12" cy="10" r="2.6" />
+            </svg>
+            {t("driver.showMap")}
+          </span>
+        </button>
+      </div>
       {children ? <div className="mt-3">{children}</div> : null}
+      <DispatchMapDialog
+        open={mapOpen}
+        onClose={() => setMapOpen(false)}
+        title={`${t("dispatch.pickup")} ← ${t("dispatch.dropoff")}`}
+        center={pickup}
+        markers={[
+          { ...pickup, label: `${t("dispatch.pickup")}: ${job.kitchenName}`, color: "#C8963C" },
+          ...(drop ? [{ ...drop, label: `${t("dispatch.dropoff")}: ${job.deliveryAddress}`, color: "#A44E32" }] : []),
+        ]}
+      />
     </li>
   );
 }

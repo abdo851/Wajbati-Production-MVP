@@ -3,6 +3,7 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import toast from "react-hot-toast";
 import { AdminChat } from "@/components/chat-panel";
+import { AdminSettings } from "@/components/admin-settings";
 import { LoginCard } from "@/components/login-card";
 import { ReviewModal, type ReviewView } from "@/components/review-modal";
 import { useI18n } from "@/components/language";
@@ -38,7 +39,7 @@ export function AdminDashboard() {
 function Desk({ name, onLogout }: { name: string; onLogout: () => Promise<void> }) {
   const { t } = useI18n();
   const { data, error, loading, reconnecting, reload } = useLiveQuery<AdminOverview>("/api/admin/overview");
-  const [tab, setTab] = useState<"orders" | "chefs" | "drivers" | "history" | "emails" | "messages" | "users">("orders");
+  const [tab, setTab] = useState<"orders" | "chefs" | "drivers" | "history" | "emails" | "messages" | "users" | "settings">("orders");
   const [range, setRange] = useState<DateRange>("all");
   const [refreshKey, setRefreshKey] = useState(0);
   const tabs = [
@@ -49,6 +50,7 @@ function Desk({ name, onLogout }: { name: string; onLogout: () => Promise<void> 
     ["users", t("admin.tabUsers")],
     ["emails", t("admin.tabEmails")],
     ["messages", t("admin.tabMessages")],
+    ["settings", t("admin.tabSettings")],
   ] as const;
 
   async function logout() {
@@ -264,6 +266,7 @@ function Desk({ name, onLogout }: { name: string; onLogout: () => Promise<void> 
       {tab === "users" ? <AllUsers /> : null}
       {tab === "emails" ? <EmailCaptures /> : null}
       {tab === "messages" ? <AdminChat /> : null}
+      {tab === "settings" ? <AdminSettings /> : null}
     </main>
   );
 }

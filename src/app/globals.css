@@ -133,7 +133,7 @@ dialog::backdrop {
 html[lang="ar"] body {
   font-family: var(--font-arabic);
   font-size: 1.0625rem;
-  line-height: 1.75;
+  line-height: 1.85;
 }
 
 html[lang="ar"] .font-display {

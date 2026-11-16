@@ -34,14 +34,14 @@ export function MealBoard() {
   const kitchens = new Set(meals.map((meal) => meal.kitchenName)).size;
 
   return (
-    <section id="meals" className="mx-auto max-w-6xl px-3 py-5 sm:px-6">
+    <section id="meals" className="mx-auto max-w-6xl px-3 py-8 sm:px-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <div className="flex items-center gap-3">
             <h2 className="font-display text-4xl">{t("board.title")}</h2>
             <LiveDot />
           </div>
-          <p className="mt-1 text-base text-muted">
+          <p className="mt-2 text-base leading-7 text-muted">
             {data
               ? t("board.summary", {
                   date: formatServiceDate(data.serviceDate, lang),
@@ -56,7 +56,7 @@ export function MealBoard() {
           </p>
         </div>
       </div>
-      <div className="mt-4 flex flex-wrap gap-2">
+      <div className="mt-6 flex flex-wrap gap-2">
         {([
           ["today", t("meal.today")],
           ["yesterday", t("meal.yesterday")],
@@ -412,7 +412,24 @@ function OrderDialog({
               <span className="mb-1.5 block font-semibold">{t("order.address")}</span>
               <input className={inputClass} autoComplete="street-address" value={address} onChange={(event) => setAddress(event.target.value)} required />
             </label>
-            <button type="button" className={`${quietButtonClass} w-full`} onClick={() => setMapOpen(true)}>
+            <button
+              type="button"
+              className={`${quietButtonClass} w-full`}
+              onClick={() => {
+                if (!navigator.geolocation) {
+                  setMapOpen(true);
+                  return;
+                }
+                navigator.geolocation.getCurrentPosition(
+                  (position) => {
+                    setCoords({ lat: position.coords.latitude, lng: position.coords.longitude });
+                    setMapOpen(true);
+                  },
+                  () => setMapOpen(true),
+                  { enableHighAccuracy: true, timeout: 8000 },
+                );
+              }}
+            >
               <span className="inline-flex items-center gap-1.5">
                 <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
                   <path d="M12 21s-7-5.1-7-11a7 7 0 1 1 14 0c0 5.9-7 11-7 11z" />
@@ -488,7 +505,13 @@ function OrderDialog({
             </div>
           </form>
         )}
-        <LocationPicker open={mapOpen} onClose={() => setMapOpen(false)} onConfirm={(lat, lng) => setCoords({ lat, lng })} />
+        <LocationPicker
+          open={mapOpen}
+          onClose={() => setMapOpen(false)}
+          onConfirm={(lat, lng) => setCoords({ lat, lng })}
+          initialLat={coords?.lat}
+          initialLng={coords?.lng}
+        />
       </motion.div>
     </motion.div>
   );

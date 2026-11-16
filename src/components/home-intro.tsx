@@ -17,18 +17,18 @@ export function HomeIntro() {
   const { t } = useI18n();
 
   return (
-    <section className="mx-auto grid max-w-6xl gap-4 px-3 pt-4 pb-1 sm:px-6 sm:pt-6 lg:grid-cols-[1.35fr_0.65fr] lg:items-end">
+    <section className="mx-auto grid max-w-6xl gap-6 px-3 pt-6 pb-2 sm:px-6 sm:pt-8 lg:grid-cols-[1.35fr_0.65fr] lg:items-end">
       <motion.div variants={container} initial="hidden" animate="show">
         <motion.p variants={item} className="gold-text text-sm font-bold tracking-wide">
           {t("home.kicker")}
         </motion.p>
         <motion.h1
           variants={item}
-          className="mt-1 max-w-xl font-display text-3xl leading-tight text-foreground sm:text-5xl"
+          className="mt-2 max-w-xl font-display text-3xl leading-tight text-foreground sm:text-5xl"
         >
           {t("home.title")}
         </motion.h1>
-        <motion.p variants={item} className="mt-2 max-w-lg text-sm leading-6 text-muted sm:text-base">
+        <motion.p variants={item} className="mt-4 max-w-lg text-sm leading-7 text-muted sm:text-base sm:leading-8">
           {t("home.body")}
         </motion.p>
       </motion.div>

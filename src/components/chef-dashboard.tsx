@@ -4,6 +4,10 @@ import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from "r
 import Link from "next/link";
 import { LoginCard } from "@/components/login-card";
 import { ProfileEditModal } from "@/components/profile-edit-modal";
+import dynamic from "next/dynamic";
+import { cityCenter, type LatLng } from "@/lib/geo";
+
+const DispatchMapDialog = dynamic(() => import("@/components/dispatch-map-dialog").then((mod) => mod.DispatchMapDialog), { ssr: false });
 import { PhotoGallery, PenButton } from "@/components/photo-gallery";
 import { ProfilePhoto } from "@/components/site-header";
 import { SecureInbox } from "@/components/secure-chat";
@@ -157,6 +161,7 @@ function Kitchen({
   const [album, setAlbum] = useState(gallery);
   const [photos, setPhotos] = useState<DraftPhoto[]>([]);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const kitchenCenter = cityCenter(city);
 
   const MAX_PHOTOS = 10;
 
@@ -460,7 +465,7 @@ function Kitchen({
               <p className="mt-3 text-sm text-muted">{t("chef.recentEmpty")}</p>
             ) : null}
           </section>
-          <OrderList orders={data?.orders ?? []} onChanged={() => void reload()} />
+          <OrderList orders={data?.orders ?? []} onChanged={() => void reload()} mapCenter={kitchenCenter} mapLabel={kitchen ?? ""} />
           <SecureInbox />
       </div>
     </main>
@@ -473,10 +478,11 @@ function mealDayLabel(serviceDate: string, today: string, t: (key: "meal.today" 
   return formatServiceDate(serviceDate);
 }
 
-function OrderList({ orders, onChanged }: { orders: ChefOrder[]; onChanged: () => void }) {
+function OrderList({ orders, onChanged, mapCenter, mapLabel }: { orders: ChefOrder[]; onChanged: () => void; mapCenter: LatLng; mapLabel: string }) {
   const { t } = useI18n();
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [driverMapOpen, setDriverMapOpen] = useState(false);
 
   async function update(order: ChefOrder, status: OrderStatus) {
     if (status === "cancelled" && !window.confirm(t("chef.cancelAsk"))) {
@@ -552,7 +558,18 @@ function OrderList({ orders, onChanged }: { orders: ChefOrder[]; onChanged: () =
                   </button>
                 ) : null}
                 {order.status === "confirmed" ? (
-                  <p className="self-center text-sm text-muted">{t("chef.readyDriver")}</p>
+                  <>
+                    <p className="self-center text-sm text-muted">{t("chef.readyDriver")}</p>
+                    <button type="button" className={quietButtonClass} onClick={() => setDriverMapOpen(true)}>
+                      <span className="inline-flex items-center gap-1.5">
+                        <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+                          <circle cx="12" cy="12" r="8" />
+                          <path d="M12 4v2M12 18v2M4 12h2M18 12h2" strokeLinecap="round" />
+                        </svg>
+                        {t("chef.findDriver")}
+                      </span>
+                    </button>
+                  </>
                 ) : null}
                 {order.status === "assigned" || order.status === "picked_up" ? (
                   <p className="self-center text-sm text-muted">{t("chef.driverHas")}</p>
@@ -567,6 +584,14 @@ function OrderList({ orders, onChanged }: { orders: ChefOrder[]; onChanged: () =
           ))}
         </ul>
       )}
+      <DispatchMapDialog
+        open={driverMapOpen}
+        onClose={() => setDriverMapOpen(false)}
+        title={t("dispatch.title")}
+        center={mapCenter}
+        circleKm={5}
+        markers={[{ ...mapCenter, label: `${mapLabel} · ${t("dispatch.radius")}`, color: "#C8963C" }]}
+      />
     </section>
   );
 }
