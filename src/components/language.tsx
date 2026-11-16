@@ -98,7 +98,7 @@ export function LanguageMenu() {
   return (
     <button
       type="button"
-      className="inline-flex min-h-11 items-center gap-2 rounded-full border border-line bg-card px-3 text-sm font-medium shadow-[0_8px_16px_-12px_rgba(90,48,20,0.8)]"
+      className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-full border border-line bg-card px-3 text-sm font-medium shadow-[0_8px_16px_-12px_rgba(90,48,20,0.8)]"
       aria-haspopup="dialog"
       aria-expanded={languageOpen}
       aria-label={t("lang.label")}
@@ -108,7 +108,7 @@ export function LanguageMenu() {
         <circle cx="12" cy="12" r="9" />
         <path d="M3 12h18M12 3c2.5 2.8 3.8 5.8 3.8 9s-1.3 6.2-3.8 9c-2.5-2.8-3.8-5.8-3.8-9s1.3-6.2 3.8-9z" />
       </svg>
-      {t(lang === "ar" ? "lang.ar" : lang === "fr" ? "lang.fr" : "lang.en")}
+      <span className="hidden sm:inline">{t(lang === "ar" ? "lang.ar" : lang === "fr" ? "lang.fr" : "lang.en")}</span>
     </button>
   );
 }

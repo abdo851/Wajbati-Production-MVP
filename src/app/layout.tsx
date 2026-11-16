@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Alexandria, Fraunces, Outfit } from "next/font/google";
 import { LanguageProvider } from "@/components/language";
 import { AppToaster } from "@/components/toaster";
+import { ServiceWorkerRegister } from "@/components/service-worker-register";
 import "./globals.css";
 
 const outfit = Outfit({
@@ -59,6 +60,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <body className="flex min-h-dvh min-h-screen flex-col pt-safe pr-safe pb-safe pl-safe">
         <LanguageProvider initial="ar">{children}</LanguageProvider>
         <AppToaster />
+        <ServiceWorkerRegister />
       </body>
     </html>
   );

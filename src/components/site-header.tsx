@@ -94,11 +94,11 @@ export function SiteHeader() {
       <header className="glass sticky top-0 z-20 border-b border-line/60 shadow-[0_1px_0_rgba(23,19,15,0.03)]">
         <div className="mx-auto flex h-14 max-w-6xl items-center gap-2 px-3 sm:px-5">
           {hideMenu ? <span className="size-10 shrink-0" /> : <MenuButton open={open} onClick={() => setOpen(true)} />}
-          <Link href="/" className="flex min-w-0 items-center gap-2">
+          <Link href="/" className="flex min-w-0 flex-1 items-center gap-2 sm:flex-none">
             <Mark />
             <span className="truncate font-display text-xl leading-none">{lang === "ar" ? "وجبتي" : "Wajbati"}</span>
           </Link>
-          <div className="ms-auto flex items-center gap-1.5">
+          <div className="ms-auto flex shrink-0 items-center gap-1.5">
             {deskHref ? (
               <Link href={deskHref} aria-label={t("header.profile")} className="inline-flex rounded-full transition duration-200 hover:ring-4 hover:ring-gold/20">
                 <ProfilePhoto src={user?.avatarDataUrl} label={t("header.profile")} className="size-9" />

@@ -13,6 +13,7 @@ import { LiveDot, inputClass, primaryButtonClass, quietButtonClass } from "@/com
 import { useI18n } from "@/components/language";
 import { useLiveQuery } from "@/components/use-live-query";
 import { readCheckout, rememberReceipt, writeCheckout } from "@/lib/guest";
+import { SplashScreen } from "@/components/splash-screen";
 
 const LocationPicker = dynamic(() => import("@/components/location-picker").then((mod) => mod.LocationPicker), { ssr: false });
 
@@ -77,7 +78,9 @@ export function MealBoard() {
           {error}
         </p>
       ) : null}
-      {loading && !data ? <p className="mt-8 text-base text-muted">{t("board.loading")}</p> : null}
+      <AnimatePresence>
+        {loading && !data ? <SplashScreen key="splash" /> : null}
+      </AnimatePresence>
       {!loading && !error && meals.length === 0 ? (
         <p className="lift-card mt-8 rounded-3xl px-5 py-10 text-center text-base text-muted">{t("board.empty")}</p>
       ) : null}
