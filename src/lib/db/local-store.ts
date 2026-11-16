@@ -115,6 +115,8 @@ type Order = {
   customerName: string;
   customerPhone: string;
   deliveryAddress: string;
+  deliveryLat?: number | null;
+  deliveryLng?: number | null;
   quantity: number;
   unitPriceMad: number;
   commissionPerMealMad: number;
@@ -1179,6 +1181,15 @@ export async function findLocalUser(userId: string): Promise<AuthUser | null> {
   }, false);
 }
 
+export async function findLocalCustomerByEmail(email: string): Promise<AuthUser | null> {
+  return withDb((db) => {
+    const profile = db.profiles.find(
+      (item) => item.role === "customer" && item.email.toLowerCase() === email.trim().toLowerCase(),
+    );
+    return profile ? mapUser(db, profile) : null;
+  }, false);
+}
+
 export async function authenticateLocalDriver(identifier: string, password: string): Promise<AuthUser | null> {
   return withDb((db) => {
     const driver = db.drivers.find((item) => item.phone === identifier || item.email === identifier);
@@ -1426,6 +1437,8 @@ export const localRepository = {
         customerName: input.customerName,
         customerPhone: input.customerPhone,
         deliveryAddress: input.deliveryAddress,
+        deliveryLat: input.deliveryLat ?? null,
+        deliveryLng: input.deliveryLng ?? null,
         quantity: input.quantity,
         unitPriceMad: meal.priceMad,
         commissionPerMealMad: fees.chefPerPortionMad,

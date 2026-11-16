@@ -24,7 +24,7 @@ export async function POST(request: Request) {
       priceMad: price,
       maxQuantity: Number.isInteger(quantity) ? quantity : Math.round(quantity),
     });
-    const files = form.getAll("photo").filter((item): item is File => item instanceof File).slice(0, 8);
+    const files = form.getAll("photo").filter((item): item is File => item instanceof File).slice(0, 10);
     if (files.length === 0) throw new StoreError(SHARP_PHOTO_ERROR, 400);
     const repository = getRepository(accessToken);
     const meal = await repository.createMeal(user.chefId as string, input);

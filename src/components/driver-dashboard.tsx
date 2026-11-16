@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
 import { DocumentUpload } from "@/components/document-upload";
-import { ProfileExtras } from "@/components/profile-extras";
+import { ProfileEditModal } from "@/components/profile-edit-modal";
 import { DriverAuth } from "@/components/driver-auth";
 import { PhotoGallery, PenButton } from "@/components/photo-gallery";
 import { ProfilePhoto } from "@/components/site-header";
@@ -148,7 +148,7 @@ function Route({
         <PhotoGallery images={album} onChange={setAlbum} />
         <p className="mt-3 text-sm font-medium text-muted">{t("chef.city")}</p>
         <p className="mt-1 text-base text-terracotta">{city || "—"}</p>
-        {editingProfile ? <ProfileExtras role="driver" onSaved={onProfileSaved} /> : null}
+        <ProfileEditModal open={editingProfile} onClose={() => setEditingProfile(false)} role="driver" onSaved={onProfileSaved} />
       </section>
       <WalletPanel />
       {data ? <Earnings board={data} /> : null}

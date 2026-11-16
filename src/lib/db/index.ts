@@ -4,6 +4,7 @@ import {
   authenticateLocalDriver,
   findLocalGoogle,
   findLocalUser,
+  findLocalCustomerByEmail,
   localRepository,
   confirmLocalEmail,
   registerLocalChef,
@@ -53,6 +54,11 @@ export async function findUser(userId: string, accessToken?: string) {
     return findSupabaseUser(accessToken);
   }
   return findLocalUser(userId);
+}
+
+export async function findCustomerByEmail(email: string) {
+  if (dataProvider() === "supabase") return null;
+  return findLocalCustomerByEmail(email);
 }
 
 export async function authenticateDriver(identifier: string, password: string) {

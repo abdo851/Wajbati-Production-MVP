@@ -73,7 +73,18 @@ export function parseOrderInput(value: unknown): PlaceOrderInput {
     deliveryAddress: text(body.deliveryAddress, "Delivery address", 4, 180),
     customerNotes: optionalNotes(body.customerNotes),
     quantity: wholeNumber(body.quantity, "Quantity", 1, 20),
+    deliveryLat: optionalCoord(body.deliveryLat),
+    deliveryLng: optionalCoord(body.deliveryLng),
   };
+}
+
+function optionalCoord(value: unknown): number | null {
+  if (value === undefined || value === null || value === "") return null;
+  const num = Number(value);
+  if (!Number.isFinite(num) || Math.abs(num) > 180) {
+    throw new StoreError("Enter a valid coordinate.", 400);
+  }
+  return num;
 }
 
 export function parseOrderEmail(value: unknown): { orderId: string; email: string } {

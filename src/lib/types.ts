@@ -113,6 +113,8 @@ export type PlaceOrderInput = {
   deliveryAddress: string;
   customerNotes: string;
   quantity: number;
+  deliveryLat?: number | null;
+  deliveryLng?: number | null;
 };
 
 export type CreateMealInput = {

@@ -31,7 +31,7 @@ export function useLiveQuery<T>(url: string | null, intervalMs = 4000) {
       const response = await fetch(url, { cache: "no-store", signal: controller.signal });
       const next = await readJson<T>(response);
       if (attempt !== attemptRef.current) return;
-      setData(next);
+      setData((previous) => (previous !== null && JSON.stringify(previous) === JSON.stringify(next) ? previous : next));
       setError(null);
       setReconnecting(false);
     } catch (caught) {

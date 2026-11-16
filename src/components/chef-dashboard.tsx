@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState, type ChangeEvent, type FormEvent } from "react";
+import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import Link from "next/link";
 import { LoginCard } from "@/components/login-card";
-import { ProfileExtras } from "@/components/profile-extras";
+import { ProfileEditModal } from "@/components/profile-edit-modal";
 import { PhotoGallery, PenButton } from "@/components/photo-gallery";
 import { ProfilePhoto } from "@/components/site-header";
 import { SecureInbox } from "@/components/secure-chat";
@@ -15,6 +15,8 @@ import { useSession } from "@/components/use-session";
 import { addCasablancaDays, formatMad, formatServiceDate, formatWhen } from "@/lib/format";
 import { readJson } from "@/lib/read-json";
 import type { ChefBoard, ChefOrder, OrderStatus } from "@/lib/types";
+
+type DraftPhoto = { id: string; url: string; file: File };
 
 export function ChefDashboard() {
   const { t } = useI18n();
@@ -150,16 +152,40 @@ function Kitchen({
   const [notice, setNotice] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
-  const [preview, setPreview] = useState<string[]>([]);
   const [editing, setEditing] = useState<string | null>(null);
   const [editingProfile, setEditingProfile] = useState(false);
   const [album, setAlbum] = useState(gallery);
+  const [photos, setPhotos] = useState<DraftPhoto[]>([]);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const MAX_PHOTOS = 10;
+
+  function addPhoto(file: File) {
+    if (photos.length >= MAX_PHOTOS) {
+      setFormError(t("chef.imagesHint"));
+      return;
+    }
+    if (file.size < 100 * 1024 || file.size > 5 * 1024 * 1024) {
+      setFormError(t("photo.quality"));
+      return;
+    }
+    setFormError(null);
+    setPhotos((current) => [...current, { id: `${Date.now()}-${current.length}-${file.name}`, url: URL.createObjectURL(file), file }]);
+  }
+
+  function removePhoto(id: string) {
+    setPhotos((current) => {
+      const target = current.find((photo) => photo.id === id);
+      if (target) URL.revokeObjectURL(target.url);
+      return current.filter((photo) => photo.id !== id);
+    });
+  }
 
   async function publish(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const formElement = event.currentTarget;
     const form = new FormData(formElement);
-    const files = form.getAll("photo").filter((item): item is File => item instanceof File && item.size > 0).slice(0, 8);
+    const files = photos.map((photo) => photo.file);
     setPending(true);
     setFormError(null);
     setNotice(null);
@@ -189,7 +215,10 @@ function Kitchen({
       }
       await readJson(response);
       formElement.reset();
-      setPreview([]);
+      setPhotos((current) => {
+        for (const photo of current) URL.revokeObjectURL(photo.url);
+        return [];
+      });
       setNotice(t("chef.published"));
       await reload();
     } catch (caught) {
@@ -277,7 +306,7 @@ function Kitchen({
         <PhotoGallery images={album} onChange={setAlbum} />
         <p className="mt-3 text-sm font-medium text-muted">{t("chef.city")}</p>
         <p className="mt-1 text-base text-terracotta">{city || "—"}</p>
-        {editingProfile ? <ProfileExtras role="chef" onSaved={onAvatarSaved} /> : null}
+        <ProfileEditModal open={editingProfile} onClose={() => setEditingProfile(false)} role="chef" onSaved={onAvatarSaved} />
         <WalletPanel />
         </div>
       </section>
@@ -288,49 +317,61 @@ function Kitchen({
           <h2 className="font-display text-3xl">{t("chef.cookingTitle")}</h2>
         </div>
         <form onSubmit={publish} className="space-y-3">
-          <label className="block text-sm">
-            <span className="mb-1.5 block font-medium">{t("chef.photo")}</span>
-            <span className="flex min-h-52 cursor-pointer flex-col items-center justify-center overflow-hidden rounded-3xl border border-dashed border-terracotta/40 bg-terracotta/5 px-4 py-6 text-center">
-              {preview.length > 0 ? (
-                <span className="mb-3 grid w-full grid-cols-3 gap-2">
-                  {preview.map((src) => (
-                    <span key={src} className="aspect-square overflow-hidden rounded-lg">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={src} alt="" className="h-full w-full object-cover" />
-                    </span>
-                  ))}
-                </span>
-              ) : (
-                <span className="mb-2 inline-flex size-12 items-center justify-center rounded-2xl bg-gradient-to-l from-gold to-gold-deep text-white shadow-[0_8px_20px_-8px_rgba(169,127,44,0.8)]" aria-hidden="true">
-                  <svg viewBox="0 0 24 24" className="size-6" fill="none" stroke="currentColor" strokeWidth="1.6">
-                    <path d="M4 16l4.5-4.5a2 2 0 012.8 0L16 16" />
-                    <rect x="3" y="4" width="18" height="16" rx="2" />
-                    <circle cx="9" cy="9" r="1.2" fill="currentColor" />
-                  </svg>
-                </span>
-              )}
-              <span className="text-base font-medium">{t("chef.photo")}</span>
-              <span className="mt-1 text-sm text-muted">{t("chef.photoHint")}</span>
+          <div className="block text-sm">
+            <span className="mb-1.5 block font-semibold">{t("chef.photo")}</span>
+            <div className="flex min-h-40 flex-col items-center justify-center rounded-3xl border border-dashed border-terracotta/40 bg-terracotta/5 px-4 py-6 text-center">
+              <span className="mb-3 inline-flex size-12 items-center justify-center rounded-2xl bg-gradient-to-l from-gold to-gold-deep text-white shadow-[0_8px_20px_-8px_rgba(169,127,44,0.8)]" aria-hidden="true">
+                <svg viewBox="0 0 24 24" className="size-6" fill="none" stroke="currentColor" strokeWidth="1.6">
+                  <path d="M4 16l4.5-4.5a2 2 0 012.8 0L16 16" />
+                  <rect x="3" y="4" width="18" height="16" rx="2" />
+                  <circle cx="9" cy="9" r="1.2" fill="currentColor" />
+                </svg>
+              </span>
+              <button
+                type="button"
+                className={quietButtonClass}
+                onClick={() => fileInputRef.current?.click()}
+                disabled={photos.length >= MAX_PHOTOS}
+              >
+                {t("chef.addImage")}
+              </button>
+              <span className="mt-2 text-xs text-muted">
+                {t("chef.imagesHint")} · {photos.length}/{MAX_PHOTOS}
+              </span>
               <input
+                ref={fileInputRef}
                 className="sr-only"
-                name="photo"
                 type="file"
                 accept="image/jpeg,image/png,image/webp"
-                multiple
                 onChange={(event) => {
-                  const files = Array.from(event.target.files ?? []).slice(0, 8);
-                  if (files.some((file) => file.size < 100 * 1024 || file.size > 5 * 1024 * 1024)) {
-                    setFormError(t("photo.quality"));
-                    event.target.value = "";
-                    setPreview([]);
-                    return;
-                  }
-                  setFormError(null);
-                  setPreview(files.map((file) => URL.createObjectURL(file)));
+                  const file = event.target.files?.[0] ?? null;
+                  event.target.value = "";
+                  if (file) addPhoto(file);
                 }}
               />
-            </span>
-          </label>
+            </div>
+            {photos.length > 0 ? (
+              <ul className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-5">
+                {photos.map((photo, photoIndex) => (
+                  <li key={photo.id} className="relative aspect-square overflow-hidden rounded-2xl border border-line bg-surface">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={photo.url} alt="" className="h-full w-full object-cover" />
+                    {photoIndex === 0 ? (
+                      <span className="absolute start-1 top-1 rounded-full bg-gold-deep px-2 py-0.5 text-[10px] font-bold text-white">1</span>
+                    ) : null}
+                    <button
+                      type="button"
+                      className="absolute end-1 top-1 inline-flex size-6 items-center justify-center rounded-full bg-ink/60 text-xs text-white transition hover:bg-ink"
+                      aria-label={t("chef.removeImage")}
+                      onClick={() => removePhoto(photo.id)}
+                    >
+                      ×
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
           <label className="block text-sm">
             <span className="mb-1.5 block font-medium">{t("chef.fieldTitle")}</span>
             <input className={inputClass} name="title" required minLength={3} maxLength={80} />

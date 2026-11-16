@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { memo, useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { AnimatePresence, motion } from "framer-motion";
 import { DELIVERY_FEE_MAD } from "@/lib/constants";
 import { addCasablancaDays, formatMad, formatServiceDate, formatWhen } from "@/lib/format";
@@ -12,6 +13,8 @@ import { LiveDot, inputClass, primaryButtonClass, quietButtonClass } from "@/com
 import { useI18n } from "@/components/language";
 import { useLiveQuery } from "@/components/use-live-query";
 import { readCheckout, rememberReceipt, writeCheckout } from "@/lib/guest";
+
+const LocationPicker = dynamic(() => import("@/components/location-picker").then((mod) => mod.LocationPicker), { ssr: false });
 
 export function MealBoard() {
   const { data, error, loading, reload } = useLiveQuery<MealListResponse>("/api/meals");
@@ -106,7 +109,8 @@ export function MealBoard() {
   );
 }
 
-function MealCard({ meal, index, canOrder, onOrder }: { meal: PublicMeal; index: number; canOrder: boolean; onOrder: (meal: PublicMeal) => void }) {
+const MealCard = memo(
+  function MealCard({ meal, index, canOrder, onOrder }: { meal: PublicMeal; index: number; canOrder: boolean; onOrder: (meal: PublicMeal) => void }) {
   const { t, lang } = useI18n();
   const soldOut = meal.remainingQuantity <= 0;
   const photos = meal.photoUrls?.length ? meal.photoUrls : meal.photoUrl ? [meal.photoUrl] : [];
@@ -128,6 +132,8 @@ function MealCard({ meal, index, canOrder, onOrder }: { meal: PublicMeal; index:
           <img
             src={photo}
             alt=""
+            loading="lazy"
+            decoding="async"
             className="h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-110"
           />
         ) : (
@@ -167,7 +173,17 @@ function MealCard({ meal, index, canOrder, onOrder }: { meal: PublicMeal; index:
       </div>
     </motion.article>
   );
-}
+  },
+  (previous, next) =>
+    previous.meal.id === next.meal.id &&
+    previous.canOrder === next.canOrder &&
+    previous.meal.title === next.meal.title &&
+    previous.meal.priceMad === next.meal.priceMad &&
+    previous.meal.remainingQuantity === next.meal.remainingQuantity &&
+    previous.meal.kitchenName === next.meal.kitchenName &&
+    previous.meal.photoUrl === next.meal.photoUrl &&
+    (previous.meal.photoUrls?.length ?? 0) === (next.meal.photoUrls?.length ?? 0),
+);
 
 function OrderDialog({
   meal,
@@ -189,6 +205,8 @@ function OrderDialog({
   const [chatOpen, setChatOpen] = useState(false);
   const [email, setEmail] = useState("");
   const [emailState, setEmailState] = useState<"ask" | "saving" | "saved" | "hidden">("ask");
+  const [mapOpen, setMapOpen] = useState(false);
+  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
   const { t, lang } = useI18n();
 
   useEffect(() => {
@@ -234,6 +252,8 @@ function OrderDialog({
           deliveryAddress: address,
           customerNotes: notes,
           quantity: safeQuantity,
+          deliveryLat: coords?.lat ?? null,
+          deliveryLng: coords?.lng ?? null,
         }),
       });
       const body = await readJson<{ order: OrderReceipt }>(response);
@@ -392,6 +412,20 @@ function OrderDialog({
               <span className="mb-1.5 block font-semibold">{t("order.address")}</span>
               <input className={inputClass} autoComplete="street-address" value={address} onChange={(event) => setAddress(event.target.value)} required />
             </label>
+            <button type="button" className={`${quietButtonClass} w-full`} onClick={() => setMapOpen(true)}>
+              <span className="inline-flex items-center gap-1.5">
+                <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+                  <path d="M12 21s-7-5.1-7-11a7 7 0 1 1 14 0c0 5.9-7 11-7 11z" />
+                  <circle cx="12" cy="10" r="2.6" />
+                </svg>
+                {t("order.mapButton")}
+              </span>
+            </button>
+            {coords ? (
+              <p className="text-xs font-bold text-gold-deep" dir="ltr">
+                📍 {coords.lat.toFixed(6)}, {coords.lng.toFixed(6)}
+              </p>
+            ) : null}
             <label className="block text-base">
               <span className="mb-1.5 block font-semibold">{t("order.notes")}</span>
               <textarea
@@ -454,6 +488,7 @@ function OrderDialog({
             </div>
           </form>
         )}
+        <LocationPicker open={mapOpen} onClose={() => setMapOpen(false)} onConfirm={(lat, lng) => setCoords({ lat, lng })} />
       </motion.div>
     </motion.div>
   );

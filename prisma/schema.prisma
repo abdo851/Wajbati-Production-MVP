@@ -139,6 +139,8 @@ model Order {
   flowStatus           String
   otpCode              String      @map("otp_code")
   address              String
+  deliveryLat          Float?
+  deliveryLng          Float?
   notes                String?
   totalPrice           Float       @map("total_price")
   customerName         String
