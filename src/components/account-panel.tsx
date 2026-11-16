@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, type FormEvent } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { PasswordField } from "@/components/password-field";
 import { ProfileExtras } from "@/components/profile-extras";
@@ -118,15 +119,18 @@ export function AccountPanel() {
       <h1 className="mt-2 font-display text-4xl">{t("account.title")}</h1>
       <p className="mt-3 text-base leading-8 text-muted">{t("account.body")}</p>
       {!session?.user ? (
-        <div className="lift-card mt-6 rounded-3xl border border-line bg-card p-5">
-          <p className="text-base leading-8 text-muted">{t("account.emailHint")}</p>
-          <label className="mt-4 block text-base">
-            <span className="mb-1.5 block font-medium">{t("auth.email")}</span>
-            <input className={inputClass} type="email" dir="ltr" autoComplete="email" placeholder="you@example.com" />
-          </label>
-          <button type="button" className={`${primaryButtonClass} mt-4 w-full`} disabled>
-            {t("account.soon")}
-          </button>
+        <div className="lift-card mt-8 rounded-3xl border border-line bg-card p-8 text-center">
+          <span className="mx-auto inline-flex size-14 items-center justify-center rounded-full bg-gradient-to-l from-gold to-gold-deep text-white shadow-[0_10px_24px_-10px_rgba(169,127,44,0.8)]" aria-hidden="true">
+            <svg viewBox="0 0 24 24" className="size-7" fill="none" stroke="currentColor" strokeWidth="1.8">
+              <circle cx="10" cy="8" r="3.2" />
+              <path d="M3.5 19c1.4-2.8 3.8-4.3 6.5-4.3 1.9 0 3.6.8 5 2.3" />
+              <path d="M18 14.5v5M15.5 17h5" strokeLinecap="round" />
+            </svg>
+          </span>
+          <p className="mt-4 text-base leading-8 text-muted">{t("account.joinHint")}</p>
+          <Link href="/join" className={`${primaryButtonClass} mt-5 w-full`}>
+            {t("nav.join")}
+          </Link>
         </div>
       ) : null}
       {customer ? (

@@ -7,7 +7,7 @@ export function SplashScreen() {
   const { lang, t } = useI18n();
   return (
     <motion.div
-      className="fixed inset-0 z-[90] flex flex-col items-center justify-center bg-gradient-to-b from-[#FAF8F5] to-background"
+      className="fixed inset-0 z-[90] flex flex-col items-center justify-center bg-gradient-to-b from-[#FAF8F5] to-background px-4 text-center"
       initial={{ opacity: 1 }}
       exit={{ opacity: 0, transition: { duration: 0.6, ease: "easeInOut" } }}
       aria-hidden="true"

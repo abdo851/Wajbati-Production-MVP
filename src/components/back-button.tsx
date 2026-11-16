@@ -14,7 +14,7 @@ export function BackButton() {
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3 }}
       whileTap={{ scale: 0.95 }}
-      className="glass fixed start-4 top-[4.25rem] z-30 inline-flex min-h-10 items-center gap-1 rounded-full px-3.5 text-sm font-semibold text-foreground shadow-lux"
+      className="glass mb-4 inline-flex min-h-10 items-center gap-1 rounded-full px-3.5 text-sm font-semibold text-foreground shadow-lux"
       onClick={() => router.back()}
     >
       <svg

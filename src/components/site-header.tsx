@@ -98,6 +98,7 @@ export function SiteHeader() {
             <span className="[&>svg]:size-8 sm:[&>svg]:size-9">
               <Mark />
             </span>
+            <span className="ms-2 font-display text-lg leading-none sm:text-xl">{lang === "ar" ? "ريغ" : "Righ"}</span>
           </Link>
           <span className="flex-1" aria-hidden="true" />
           <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
