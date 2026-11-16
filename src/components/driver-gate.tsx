@@ -12,7 +12,7 @@ export function DriverGate() {
   const { session, error } = useSession();
 
   useEffect(() => {
-    document.title = `${t("nav.drive")} · Wajbati`;
+    document.title = `${t("nav.drive")} · Righ`;
   }, [t]);
 
   useEffect(() => {

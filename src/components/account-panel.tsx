@@ -117,6 +117,18 @@ export function AccountPanel() {
       <p className="text-base font-medium text-olive">{t("account.signedIn")}</p>
       <h1 className="mt-2 font-display text-4xl">{t("account.title")}</h1>
       <p className="mt-3 text-base leading-8 text-muted">{t("account.body")}</p>
+      {!session?.user ? (
+        <div className="lift-card mt-6 rounded-3xl border border-line bg-card p-5">
+          <p className="text-base leading-8 text-muted">{t("account.emailHint")}</p>
+          <label className="mt-4 block text-base">
+            <span className="mb-1.5 block font-medium">{t("auth.email")}</span>
+            <input className={inputClass} type="email" dir="ltr" autoComplete="email" placeholder="you@example.com" />
+          </label>
+          <button type="button" className={`${primaryButtonClass} mt-4 w-full`} disabled>
+            {t("account.soon")}
+          </button>
+        </div>
+      ) : null}
       {customer ? (
         <form onSubmit={saveProfile} className="lift-card mt-6 space-y-4 rounded-3xl border border-line bg-card p-5">
           <label className="block text-base">

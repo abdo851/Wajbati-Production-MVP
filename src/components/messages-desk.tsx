@@ -12,7 +12,7 @@ export function MessagesDesk() {
   const { session, error } = useSession();
 
   useEffect(() => {
-    document.title = `${t("chat.title")} · Wajbati`;
+    document.title = `${t("chat.title")} · Righ`;
   }, [t]);
 
   if (error && !session) return <p className="px-4 py-16 text-sm text-terracotta-deep">{error}</p>;

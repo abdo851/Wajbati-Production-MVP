@@ -94,7 +94,7 @@ export function SiteHeader() {
       <header className="glass sticky top-0 z-20 border-b border-line/60 shadow-[0_1px_0_rgba(23,19,15,0.03)]">
         <div className="mx-auto flex h-14 max-w-6xl items-center gap-1.5 px-2.5 sm:gap-2 sm:px-5">
           {hideMenu ? <span className="size-10 shrink-0" /> : <MenuButton open={open} onClick={() => setOpen(true)} />}
-          <Link href="/" className="flex shrink-0 items-center" aria-label={lang === "ar" ? "وجبتي" : "Wajbati"}>
+          <Link href="/" className="flex shrink-0 items-center" aria-label={lang === "ar" ? "ريغ" : "Righ"}>
             <span className="[&>svg]:size-8 sm:[&>svg]:size-9">
               <Mark />
             </span>
@@ -127,7 +127,7 @@ export function SiteFooter() {
   return (
     <footer className="mt-auto border-t border-line/70">
       <div className="mx-auto flex max-w-6xl flex-col gap-2 px-4 py-6 text-base text-muted sm:flex-row sm:items-center sm:justify-between sm:px-6">
-        <p className="font-display text-lg">{lang === "ar" ? "وجبتي" : "Wajbati"}</p>
+        <p className="font-display text-lg">{lang === "ar" ? "ريغ" : "Righ"}</p>
         <p className="flex flex-wrap gap-3">
           <Link href="/terms" className="transition hover:text-gold-deep">{t("footer.terms")}</Link>
           <Link href="/privacy" className="transition hover:text-gold-deep">{t("footer.privacy")}</Link>

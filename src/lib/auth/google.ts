@@ -76,7 +76,7 @@ export async function exchangeGoogleCode(origin: string, code: string): Promise<
     identity: {
       sub: profile.sub,
       email: profile.email.toLowerCase(),
-      name: profile.name?.trim() || profile.email.split("@")[0] || "Wajbati",
+      name: profile.name?.trim() || profile.email.split("@")[0] || "Righ",
     },
     idToken: token.id_token ?? null,
   };

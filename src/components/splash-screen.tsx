@@ -44,7 +44,7 @@ export function SplashScreen() {
         animate={{ opacity: [0.55, 1, 0.55] }}
         transition={{ repeat: Infinity, duration: 1.8, ease: "easeInOut" }}
       >
-        {lang === "ar" ? "وجبتي" : "Wajbati"}
+        {lang === "ar" ? "ريغ" : "Righ"}
       </motion.p>
       <motion.p
         className="mt-3 text-sm font-medium text-muted"

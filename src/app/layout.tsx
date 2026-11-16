@@ -30,16 +30,16 @@ export const viewport: Viewport = {
 
 export const metadata: Metadata = {
   title: {
-    default: "Wajbati",
-    template: "%s · Wajbati",
+    default: "Righ",
+    template: "%s · Righ",
   },
   description: "أشهى الوجبات المنزلية تصلك إلى بابك",
   manifest: "/manifest.json",
-  applicationName: "وجبتي",
+  applicationName: "ريغ",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "وجبتي",
+    title: "ريغ",
   },
   icons: {
     icon: "/favicon.ico",

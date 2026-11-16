@@ -26,7 +26,7 @@ export function DriverDashboard() {
   const { session, error, reload } = useSession();
 
   useEffect(() => {
-    document.title = `${t("nav.drive")} · Wajbati`;
+    document.title = `${t("nav.drive")} · Righ`;
   }, [t]);
 
   if (error && !session) {

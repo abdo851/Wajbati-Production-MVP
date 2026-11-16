@@ -29,7 +29,7 @@ export function ChefDashboard() {
   const [reapply, setReapply] = useState(false);
 
   useEffect(() => {
-    document.title = `${t("login.kitchen")} · Wajbati`;
+    document.title = `${t("login.kitchen")} · Righ`;
   }, [t]);
 
   useEffect(() => {
