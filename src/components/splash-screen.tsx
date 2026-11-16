@@ -12,26 +12,37 @@ export function SplashScreen() {
       exit={{ opacity: 0, transition: { duration: 0.6, ease: "easeInOut" } }}
       aria-hidden="true"
     >
-      <motion.svg
-        viewBox="0 0 40 40"
-        className="size-20 drop-shadow-[0_10px_30px_rgba(169,127,44,0.45)]"
-        animate={{ scale: [1, 1.1, 1], rotate: [0, 0, 0] }}
-        transition={{ repeat: Infinity, duration: 1.6, ease: "easeInOut" }}
-      >
-        <defs>
-          <linearGradient id="splash-gold" x1="0" y1="0" x2="40" y2="40" gradientUnits="userSpaceOnUse">
-            <stop offset="0" stopColor="#DDB964" />
-            <stop offset="1" stopColor="#A97F2C" />
-          </linearGradient>
-        </defs>
-        <rect width="40" height="40" rx="14" fill="url(#splash-gold)" />
-        <path d="M9 25c0-6.2 4.8-11 11-11s11 4.8 11 11v1.5H9V25z" className="fill-white" />
-        <path d="M14 14.5c1.4-3.6 10.6-3.6 12 0" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" />
-      </motion.svg>
+      <div className="relative">
+        <span className="absolute inset-0 m-auto size-28 rounded-full bg-gold/35 blur-2xl" aria-hidden="true" />
+        <motion.span
+          className="absolute -inset-3 rounded-[1.75rem] border border-gold/40"
+          aria-hidden="true"
+          animate={{ opacity: [0.35, 0.9, 0.35], scale: [1, 1.04, 1] }}
+          transition={{ repeat: Infinity, duration: 1.8, ease: "easeInOut" }}
+        />
+        <motion.svg
+          viewBox="0 0 40 40"
+          className="relative size-20 drop-shadow-[0_10px_30px_rgba(169,127,44,0.5)]"
+          animate={{ scale: [1, 1.06, 1] }}
+          transition={{ repeat: Infinity, duration: 1.8, ease: "easeInOut" }}
+        >
+          <defs>
+            <linearGradient id="splash-gold" x1="0" y1="0" x2="40" y2="40" gradientUnits="userSpaceOnUse">
+              <stop offset="0" stopColor="#E3C169" />
+              <stop offset="0.5" stopColor="#C8963C" />
+              <stop offset="1" stopColor="#A97F2C" />
+            </linearGradient>
+          </defs>
+          <rect width="40" height="40" rx="14" fill="url(#splash-gold)" />
+          <path d="M9 25c0-6.2 4.8-11 11-11s11 4.8 11 11v1.5H9V25z" className="fill-white" />
+          <path d="M14 14.5c1.4-3.6 10.6-3.6 12 0" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" />
+          <circle cx="20" cy="8.5" r="1.5" className="fill-white" opacity="0.9" />
+        </motion.svg>
+      </div>
       <motion.p
-        className="gold-text mt-5 font-display text-4xl"
+        className="gold-text mt-6 font-display text-4xl"
         animate={{ opacity: [0.55, 1, 0.55] }}
-        transition={{ repeat: Infinity, duration: 1.6, ease: "easeInOut" }}
+        transition={{ repeat: Infinity, duration: 1.8, ease: "easeInOut" }}
       >
         {lang === "ar" ? "وجبتي" : "Wajbati"}
       </motion.p>
