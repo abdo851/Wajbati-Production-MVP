@@ -94,11 +94,10 @@ export function SiteHeader() {
       <header className="glass sticky top-0 z-20 border-b border-line/60 shadow-[0_1px_0_rgba(23,19,15,0.03)]">
         <div className="mx-auto flex h-14 max-w-6xl items-center gap-1.5 px-2.5 sm:gap-2 sm:px-5">
           {hideMenu ? <span className="size-10 shrink-0" /> : <MenuButton open={open} onClick={() => setOpen(true)} />}
-          <Link href="/" className="flex shrink-0 items-center gap-2">
+          <Link href="/" className="flex shrink-0 items-center" aria-label={lang === "ar" ? "وجبتي" : "Wajbati"}>
             <span className="[&>svg]:size-8 sm:[&>svg]:size-9">
               <Mark />
             </span>
-            <span className="font-display text-lg leading-none sm:text-xl">{lang === "ar" ? "وجبتي" : "Wajbati"}</span>
           </Link>
           <span className="flex-1" aria-hidden="true" />
           <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">

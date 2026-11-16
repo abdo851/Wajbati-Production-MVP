@@ -4,26 +4,26 @@ import { motion } from "framer-motion";
 import { useI18n } from "@/components/language";
 
 export function SplashScreen() {
-  const { lang } = useI18n();
+  const { lang, t } = useI18n();
   return (
     <motion.div
-      className="fixed inset-0 z-[90] flex flex-col items-center justify-center bg-background"
+      className="fixed inset-0 z-[90] flex flex-col items-center justify-center bg-gradient-to-b from-[#FAF8F5] to-background"
       initial={{ opacity: 1 }}
       exit={{ opacity: 0, transition: { duration: 0.6, ease: "easeInOut" } }}
       aria-hidden="true"
     >
       <div className="relative">
-        <span className="absolute inset-0 m-auto size-28 rounded-full bg-gold/35 blur-2xl" aria-hidden="true" />
+        <span className="absolute inset-0 m-auto size-32 rounded-full bg-gold/30 blur-2xl" aria-hidden="true" />
         <motion.span
-          className="absolute -inset-3 rounded-[1.75rem] border border-gold/40"
+          className="absolute -inset-4 rounded-[2rem] border-2 border-gold/25"
           aria-hidden="true"
-          animate={{ opacity: [0.35, 0.9, 0.35], scale: [1, 1.04, 1] }}
-          transition={{ repeat: Infinity, duration: 1.8, ease: "easeInOut" }}
+          animate={{ rotate: 360 }}
+          transition={{ repeat: Infinity, duration: 6, ease: "linear" }}
         />
         <motion.svg
           viewBox="0 0 40 40"
-          className="relative size-20 drop-shadow-[0_10px_30px_rgba(169,127,44,0.5)]"
-          animate={{ scale: [1, 1.06, 1] }}
+          className="relative size-24 drop-shadow-[0_12px_32px_rgba(169,127,44,0.5)]"
+          animate={{ scale: [1, 1.07, 1] }}
           transition={{ repeat: Infinity, duration: 1.8, ease: "easeInOut" }}
         >
           <defs>
@@ -40,17 +40,19 @@ export function SplashScreen() {
         </motion.svg>
       </div>
       <motion.p
-        className="gold-text mt-6 font-display text-4xl"
+        className="gold-text mt-8 font-display text-4xl"
         animate={{ opacity: [0.55, 1, 0.55] }}
         transition={{ repeat: Infinity, duration: 1.8, ease: "easeInOut" }}
       >
         {lang === "ar" ? "وجبتي" : "Wajbati"}
       </motion.p>
-      <motion.span
-        className="mt-8 size-9 rounded-full border-2 border-gold/30 border-t-gold"
-        animate={{ rotate: 360 }}
-        transition={{ repeat: Infinity, duration: 0.9, ease: "linear" }}
-      />
+      <motion.p
+        className="mt-3 text-sm font-medium text-muted"
+        animate={{ opacity: [0.4, 0.9, 0.4] }}
+        transition={{ repeat: Infinity, duration: 1.8, ease: "easeInOut" }}
+      >
+        {t("splash.waiting")}
+      </motion.p>
     </motion.div>
   );
 }

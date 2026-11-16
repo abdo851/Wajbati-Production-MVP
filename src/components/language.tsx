@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
+import { AnimatePresence, motion } from "framer-motion";
 import { setFormatLang } from "@/lib/format";
 import { translate, type Lang, type MessageKey } from "@/lib/i18n";
 
@@ -131,45 +132,62 @@ export function LanguageDialog() {
     return () => window.removeEventListener("keydown", onKey);
   }, [languageOpen, closeLanguage]);
 
-  if (!mounted || !languageOpen) return null;
-
-  return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="presentation">
-      <button type="button" className="absolute inset-0 bg-foreground/40" aria-label={t("order.close")} onClick={closeLanguage} />
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="language-title"
-        className="relative z-10 w-full max-w-md rounded-3xl border border-line bg-background p-5 shadow-[0_24px_50px_-28px_rgba(90,48,20,0.9)]"
-      >
-        <h2 id="language-title" className="font-display text-3xl">
-          {t("lang.preferred")}
-        </h2>
-        <div className="mt-4 grid gap-3">
-          {choices.map((choice) => {
-            const active = choice.id === lang;
-            return (
-              <button
-                key={choice.id}
+  return (
+    <AnimatePresence>
+      {mounted && languageOpen
+        ? createPortal(
+            <div className="fixed inset-0 z-50 flex items-start justify-center px-4 pt-24 sm:pt-28" role="presentation">
+              <motion.button
                 type="button"
-                className={`lift-card flex min-h-14 items-center justify-between rounded-2xl px-4 text-start ${active ? "border-terracotta" : ""}`}
-                aria-pressed={active}
-                onClick={() => {
-                  setLang(choice.id);
-                  closeLanguage();
-                }}
+                className="absolute inset-0 bg-ink/35 backdrop-blur-md"
+                aria-label={t("order.close")}
+                onClick={closeLanguage}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.18 }}
+              />
+              <motion.div
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="language-title"
+                className="relative z-10 w-full max-w-[300px] rounded-3xl border border-white/60 bg-white/75 p-4 shadow-lux-lg backdrop-blur-xl"
+                initial={{ opacity: 0, scale: 0.92, y: -10 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: -6 }}
+                transition={{ type: "spring", stiffness: 380, damping: 30 }}
               >
-                <span>
-                  <span className="block text-lg font-medium">{t(choice.label)}</span>
-                  <span className="block text-sm text-muted">{t(choice.hint)}</span>
-                </span>
-                {active ? <span aria-hidden="true">✓</span> : null}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-    </div>,
-    document.body,
+                <h2 id="language-title" className="font-display text-xl">
+                  {t("lang.preferred")}
+                </h2>
+                <div className="mt-3 grid gap-2">
+                  {choices.map((choice) => {
+                    const active = choice.id === lang;
+                    return (
+                      <button
+                        key={choice.id}
+                        type="button"
+                        className={`lift-card flex min-h-11 items-center justify-between rounded-2xl px-3.5 text-start ${active ? "border-gold" : ""}`}
+                        aria-pressed={active}
+                        onClick={() => {
+                          setLang(choice.id);
+                          closeLanguage();
+                        }}
+                      >
+                        <span>
+                          <span className="block text-base font-semibold">{t(choice.label)}</span>
+                          <span className="block text-xs text-muted">{t(choice.hint)}</span>
+                        </span>
+                        {active ? <span className="font-bold text-gold-deep" aria-hidden="true">✓</span> : null}
+                      </button>
+                    );
+                  })}
+                </div>
+              </motion.div>
+            </div>,
+            document.body,
+          )
+        : null}
+    </AnimatePresence>
   );
 }

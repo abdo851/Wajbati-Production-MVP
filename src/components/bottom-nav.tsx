@@ -15,7 +15,7 @@ export function BottomNav() {
   const items = [
     { href: "/", label: t("nav.home"), icon: HomeIcon },
     { href: "/following", label: t("nav.following"), icon: HeartIcon },
-    { href: "/chef", label: t("nav.join"), icon: JoinIcon },
+    { href: "/join", label: t("nav.join"), icon: JoinIcon },
     { href: profileHref, label: t("nav.profile"), icon: UserIcon },
   ] as const;
 

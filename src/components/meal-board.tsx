@@ -22,6 +22,12 @@ export function MealBoard() {
   const { t, lang } = useI18n();
   const [selected, setSelected] = useState<PublicMeal | null>(null);
   const [range, setRange] = useState<"today" | "yesterday" | "recent">("today");
+  const [minSplashPassed, setMinSplashPassed] = useState(false);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setMinSplashPassed(true), 4000);
+    return () => window.clearTimeout(timer);
+  }, []);
   const today = data?.serviceDate ?? "";
   const meals = (data?.meals ?? []).filter((meal) => {
     if (!today) return false;
@@ -79,7 +85,7 @@ export function MealBoard() {
         </p>
       ) : null}
       <AnimatePresence>
-        {loading && !data ? <SplashScreen key="splash" /> : null}
+        {(loading && !data) || !minSplashPassed ? <SplashScreen key="splash" /> : null}
       </AnimatePresence>
       {!loading && !error && meals.length === 0 ? (
         <p className="lift-card mt-8 rounded-3xl px-5 py-10 text-center text-base text-muted">{t("board.empty")}</p>

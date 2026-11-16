@@ -118,7 +118,7 @@ export function PwaInstallButton() {
     <div ref={rootRef} className="relative shrink-0">
       <button
         type="button"
-        className="inline-flex min-h-10 shrink-0 items-center gap-1 rounded-full bg-gradient-to-l from-gold to-gold-deep px-2 text-[11px] font-semibold text-white shadow-[0_10px_24px_-10px_rgba(169,127,44,0.8)] transition duration-200 hover:brightness-105 active:scale-[0.97] sm:min-h-11 sm:gap-1.5 sm:px-3.5 sm:text-sm"
+        className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full bg-gradient-to-l from-gold to-gold-deep px-4 py-2.5 text-sm font-semibold text-white shadow-[0_12px_28px_-10px_rgba(169,127,44,0.85)] transition duration-200 hover:brightness-105 active:scale-[0.97] sm:px-5 sm:text-base"
         aria-label={t("pwa.install")}
         title={t("pwa.install")}
         aria-expanded={iosHelp}
