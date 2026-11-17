@@ -1,10 +1,20 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { useI18n } from "@/components/language";
 
 export function SplashScreen() {
-  const { lang, t } = useI18n();
+  const { t } = useI18n();
+  const [brand, setBrand] = useState("Righ");
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      const nav = (navigator.language || "ar").toLowerCase();
+      setBrand(nav.startsWith("ar") ? "ريغ" : "Righ");
+    }, 0);
+    return () => window.clearTimeout(timeout);
+  }, []);
   return (
     <motion.div
       className="fixed inset-0 z-[90] flex flex-col items-center justify-center bg-gradient-to-b from-[#FAF8F5] to-background px-4 text-center"
@@ -40,14 +50,14 @@ export function SplashScreen() {
         </motion.svg>
       </div>
       <motion.p
-        className="gold-text mt-8 font-display text-4xl"
+        className="gold-text mt-6 whitespace-nowrap font-display text-4xl"
         animate={{ opacity: [0.55, 1, 0.55] }}
         transition={{ repeat: Infinity, duration: 1.8, ease: "easeInOut" }}
       >
-        {lang === "ar" ? "ريغ" : "Righ"}
+        {brand}
       </motion.p>
       <motion.p
-        className="mt-3 text-sm font-medium text-muted"
+        className="mt-3 max-w-xs text-sm font-medium leading-7 text-muted"
         animate={{ opacity: [0.4, 0.9, 0.4] }}
         transition={{ repeat: Infinity, duration: 1.8, ease: "easeInOut" }}
       >

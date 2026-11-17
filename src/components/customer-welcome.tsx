@@ -86,6 +86,9 @@ export function CustomerWelcome() {
             <motion.button type="button" className={quietButtonClass} onClick={() => choose("join")} whileTap={{ scale: 0.97 }}>
               {t("welcome.join")}
             </motion.button>
+            <motion.button type="button" className={quietButtonClass} onClick={() => choose("order")} whileTap={{ scale: 0.97 }}>
+              {t("welcome.skip")}
+            </motion.button>
           </div>
         ) : (
           <div className="mt-6 grid gap-3">
