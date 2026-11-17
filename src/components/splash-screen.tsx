@@ -3,16 +3,14 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { useI18n } from "@/components/language";
+import { getDeviceBrandName } from "@/lib/device-brand";
 
 export function SplashScreen() {
   const { t } = useI18n();
   const [brand, setBrand] = useState("Righ");
 
   useEffect(() => {
-    const timeout = window.setTimeout(() => {
-      const nav = (navigator.language || "ar").toLowerCase();
-      setBrand(nav.startsWith("ar") ? "ريغ" : "Righ");
-    }, 0);
+    const timeout = window.setTimeout(() => setBrand(getDeviceBrandName()), 0);
     return () => window.clearTimeout(timeout);
   }, []);
   return (

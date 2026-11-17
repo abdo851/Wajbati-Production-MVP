@@ -7,6 +7,7 @@ import { VISIT_KEY } from "@/components/customer-welcome";
 import { PwaInstallButton } from "@/components/pwa-install-button";
 import { Sidebar } from "@/components/sidebar";
 import { useSession } from "@/components/use-session";
+import { getDeviceBrandName } from "@/lib/device-brand";
 
 function Mark() {
   return (
@@ -62,15 +63,21 @@ function MenuButton({ open, onClick }: { open: boolean; onClick: () => void }) {
 }
 
 export function SiteHeader() {
-  const { lang, t } = useI18n();
+  const { t } = useI18n();
   const { session } = useSession();
   const [open, setOpen] = useState(false);
   const [intent, setIntent] = useState<string | null>(null);
+  const [brand, setBrand] = useState("Righ");
   const user = session?.user ?? null;
   const name = user?.fullName;
   const deskHref = user?.role === "chef" ? "/chef" : user?.role === "driver" ? "/driver" : null;
   const staff = user?.role === "chef" || user?.role === "driver" || user?.role === "admin";
   const hideMenu = intent === "order" && !staff;
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => setBrand(getDeviceBrandName()), 0);
+    return () => window.clearTimeout(timeout);
+  }, []);
 
   useEffect(() => {
     function sync() {
@@ -94,11 +101,11 @@ export function SiteHeader() {
       <header className="glass sticky top-0 z-20 border-b border-line/60 shadow-[0_1px_0_rgba(23,19,15,0.03)]">
         <div className="mx-auto flex h-14 max-w-6xl items-center gap-1.5 px-2.5 sm:gap-2 sm:px-5">
           {hideMenu ? <span className="size-10 shrink-0" /> : <MenuButton open={open} onClick={() => setOpen(true)} />}
-          <Link href="/" className="flex shrink-0 items-center" aria-label={lang === "ar" ? "ريغ" : "Righ"}>
+          <Link href="/" className="flex shrink-0 items-center" aria-label={brand}>
             <span className="[&>svg]:size-8 sm:[&>svg]:size-9">
               <Mark />
             </span>
-            <span className="ms-2 font-display text-lg leading-none sm:text-xl">{lang === "ar" ? "ريغ" : "Righ"}</span>
+            <span className="ms-2 font-display text-lg leading-none sm:text-xl">{brand}</span>
           </Link>
           <span className="flex-1" aria-hidden="true" />
           <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">

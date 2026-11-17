@@ -41,7 +41,7 @@ function pooledDatabaseUrl(raw: string | undefined) {
 }
 
 function createClient() {
-  const url = pooledDatabaseUrl(process.env.DATABASE_URL);
+  const url = pooledDatabaseUrl(process.env.CUSTOM_DATABASE_URL);
   return new PrismaClient({
     ...(url ? { datasources: { db: { url } } } : {}),
     transactionOptions: {

@@ -105,6 +105,16 @@ export function LoginCard({
 
   return (
     <main className="mx-auto flex w-full max-w-md flex-1 flex-col px-4 py-12 sm:px-6">
+      <button
+        type="button"
+        className="mb-4 inline-flex min-h-10 items-center gap-1 rounded-full border border-line bg-card px-3.5 text-sm font-semibold text-foreground shadow-[0_4px_20px_rgba(23,19,15,0.08)] transition hover:border-gold/60"
+        onClick={() => router.back()}
+      >
+        <svg viewBox="0 0 24 24" className="size-4 rtl:rotate-180" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="m14 6-6 6 6 6" />
+        </svg>
+        {t("nav.back")}
+      </button>
       <p className="text-base font-medium text-olive">{admin ? t("admin.kicker") : t("nav.chef")}</p>
       <h1 className="mt-2 font-display text-4xl text-foreground">
         {admin ? t("admin.signInTitle") : mode === "register" ? t("chef.registerTitle") : t("login.kitchen")}
