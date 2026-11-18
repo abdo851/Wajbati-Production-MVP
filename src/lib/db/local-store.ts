@@ -1,6 +1,6 @@
 import { readFile } from "fs/promises";
 import path from "path";
-import { loadGraph, saveGraph } from "@/lib/db/prisma-io";
+import { loadGraph, saveGraph, authorizeAdminPasswordWrite } from "@/lib/db/prisma-io";
 import { randomBytes, randomUUID, scryptSync, timingSafeEqual } from "crypto";
 import { codesMatch, newDeliveryCode, newTrackToken } from "@/lib/delivery-code";
 import { financeOf, rowsOnDate, rowsThisWeek } from "@/lib/finance";
@@ -1196,6 +1196,7 @@ export async function updateLocalAdminCredentials(
   userId: string,
   changes: { email?: string; password?: string },
 ): Promise<void> {
+  if (changes.password) authorizeAdminPasswordWrite();
   return withDb((db) => {
     const profile = db.profiles.find((item) => item.id === userId && item.role === "admin");
     if (!profile) throw new StoreError("That admin account could not be found.", 404);

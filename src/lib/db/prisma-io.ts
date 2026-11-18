@@ -7,6 +7,12 @@ import { prisma } from "@/lib/db/prisma";
 type AppOrderStatus = Database["orders"][number]["status"];
 type Writer = Prisma.TransactionClient;
 
+let adminPasswordOverride = false;
+/** Allows the NEXT graph persistence to accept a new admin password (secure update path). */
+export function authorizeAdminPasswordWrite() {
+  adminPasswordOverride = true;
+}
+
 const ORDER_STATUS: Record<AppOrderStatus, "PENDING" | "PREPARING" | "READY" | "ACCEPTED" | "DELIVERED" | "CANCELLED"> = {
   pending: "PREPARING",
   confirmed: "READY",
@@ -143,6 +149,9 @@ async function writeGraph(tx: Writer, db: Database) {
   const emails = new Set<string>();
   const userIds = new Set<string>();
   const balances = new Map<string, number>();
+  // Preserve the admin password across full-graph persistence so a stale graph
+  // can never revert credential changes made through the secure update path.
+  const existingAdmin = await tx.user.findFirst({ where: { role: "ADMIN" }, select: { email: true, password: true } });
   for (const wallet of db.wallets) {
     if (!wallet.profileId || balances.has(wallet.profileId)) continue;
     balances.set(wallet.profileId, wallet.balanceMad);
@@ -163,7 +172,10 @@ async function writeGraph(tx: Writer, db: Database) {
       id: profile.id,
       email,
       phone: claim(phones, profile.phone),
-      password: profile.passwordHash || "missing",
+      password:
+        profile.role === "admin" && existingAdmin && !adminPasswordOverride && storedEmail(profile.email, profile.id).toLowerCase() === existingAdmin.email.toLowerCase()
+          ? existingAdmin.password
+          : profile.passwordHash || "missing",
       fullName: profile.fullName,
       role: profile.role === "chef" ? "CHEF" : profile.role === "admin" ? "ADMIN" : "CUSTOMER",
       walletBalance: roundMoney(balances.get(profile.id) ?? 0),
@@ -204,6 +216,8 @@ async function writeGraph(tx: Writer, db: Database) {
       createdAt: asTime(driver.createdAt) ?? new Date(),
     });
   }
+
+  adminPasswordOverride = false;
 
   const chefs: Prisma.ChefProfileCreateManyInput[] = [];
   const seenChefs = new Set<string>();

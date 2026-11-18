@@ -57,3 +57,6 @@ tsconfig.tsbuildinfo
 !data/private-docs/.gitkeep
 
 /src/generated/prisma
+
+.vercel
+.env*
