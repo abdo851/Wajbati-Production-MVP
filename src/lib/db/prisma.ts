@@ -6,10 +6,10 @@ const globalForPrisma = globalThis as unknown as {
   prismaPool?: string;
 };
 
-const POOL_REVISION = "neon-pooler-v4";
+const POOL_REVISION = "serverless-pooler-v5";
 const CONNECT_TIMEOUT_SECONDS = "10";
 
-function withNeonPooler(base: string) {
+function rewriteHostPort(base: string, rewrite: (host: string, port: string) => { host: string; port: string }) {
   const at = base.lastIndexOf("@");
   if (at === -1) return base;
   const prefix = base.slice(0, at + 1);
@@ -19,21 +19,49 @@ function withNeonPooler(base: string) {
   const path = slash === -1 ? "" : rest.slice(slash);
   const colon = hostPort.lastIndexOf(":");
   const host = colon === -1 ? hostPort : hostPort.slice(0, colon);
-  const port = colon === -1 ? "" : hostPort.slice(colon);
-  if (!host.endsWith(".neon.tech") || host.includes("-pooler")) return base;
-  const dot = host.indexOf(".");
-  const pooledHost = dot === -1 ? `${host}-pooler` : `${host.slice(0, dot)}-pooler${host.slice(dot)}`;
-  return `${prefix}${pooledHost}${port}${path}`;
+  const port = colon === -1 ? "" : hostPort.slice(colon + 1);
+  const next = rewrite(host, port);
+  const portPart = next.port ? `:${next.port}` : "";
+  return `${prefix}${next.host}${portPart}${path}`;
+}
+
+function withNeonPooler(base: string) {
+  return rewriteHostPort(base, (host, port) => {
+    if (!host.endsWith(".neon.tech") || host.includes("-pooler")) {
+      return { host, port };
+    }
+    const dot = host.indexOf(".");
+    const pooledHost =
+      dot === -1 ? `${host}-pooler` : `${host.slice(0, dot)}-pooler${host.slice(dot)}`;
+    return { host: pooledHost, port };
+  });
+}
+
+/**
+ * Supabase session pooler (port 5432) exhausts quickly under Vercel serverless
+ * (EMAXCONNSESSION / pool_size 15). Prefer transaction pooler (6543) on Vercel.
+ */
+function withSupabaseTransactionPooler(base: string) {
+  if (!process.env.VERCEL) return base;
+  return rewriteHostPort(base, (host, port) => {
+    if (!host.includes("pooler.supabase.com")) return { host, port };
+    return { host, port: "6543" };
+  });
 }
 
 function pooledDatabaseUrl(raw: string | undefined) {
   if (!raw) return undefined;
   const splitAt = raw.indexOf("?");
-  const base = withNeonPooler(splitAt === -1 ? raw : raw.slice(0, splitAt));
+  let base = withNeonPooler(splitAt === -1 ? raw : raw.slice(0, splitAt));
+  base = withSupabaseTransactionPooler(base);
   const params = new URLSearchParams(splitAt === -1 ? "" : raw.slice(splitAt + 1));
   const host = base.split("@")[1] ?? "";
-  if (host.includes("-pooler")) params.set("pgbouncer", "true");
-  if (!params.has("connection_limit")) params.set("connection_limit", "10");
+  if (host.includes("-pooler") || host.includes("pooler.supabase.com")) {
+    params.set("pgbouncer", "true");
+  }
+  // Serverless: one connection per isolate avoids session-pool exhaustion.
+  const defaultLimit = process.env.VERCEL ? "1" : "5";
+  params.set("connection_limit", defaultLimit);
   params.set("connect_timeout", CONNECT_TIMEOUT_SECONDS);
   params.set("pool_timeout", CONNECT_TIMEOUT_SECONDS);
   params.delete("channel_binding");

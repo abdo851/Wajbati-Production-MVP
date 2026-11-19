@@ -454,20 +454,20 @@ async function writeGraph(tx: Writer, db: Database) {
 
 export async function loadGraph(): Promise<Database | null> {
   const dataRevision = await readDataRevision(prisma);
-  const [users, chefs, drivers, meals, orders, transactions, messages, support, files, captures, settings, follows] = await Promise.all([
-    prisma.user.findMany(),
-    prisma.chefProfile.findMany(),
-    prisma.driverProfile.findMany(),
-    prisma.meal.findMany(),
-    prisma.order.findMany(),
-    prisma.walletTransaction.findMany(),
-    prisma.message.findMany(),
-    prisma.supportMessage.findMany(),
-    prisma.storedFile.findMany(),
-    prisma.emailCapture.findMany(),
-    prisma.platformSetting.findUnique({ where: { id: "default" } }),
-    prisma.follow.findMany(),
-  ]);
+  // Sequential batches (not one giant Promise.all) to stay within Supabase
+  // pooler session limits on serverless. connection_limit=1 makes this mandatory.
+  const users = await prisma.user.findMany();
+  const chefs = await prisma.chefProfile.findMany();
+  const drivers = await prisma.driverProfile.findMany();
+  const meals = await prisma.meal.findMany();
+  const orders = await prisma.order.findMany();
+  const transactions = await prisma.walletTransaction.findMany();
+  const messages = await prisma.message.findMany();
+  const support = await prisma.supportMessage.findMany();
+  const files = await prisma.storedFile.findMany();
+  const captures = await prisma.emailCapture.findMany();
+  const settings = await prisma.platformSetting.findUnique({ where: { id: "default" } });
+  const follows = await prisma.follow.findMany();
   if (users.length === 0) return null;
   const usersById = new Map(users.map((user) => [user.id, user]));
   const profiles: Database["profiles"] = users

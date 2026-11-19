@@ -23,11 +23,16 @@ export async function ensureDataRevisionTable(client: Tx = prisma): Promise<void
 }
 
 export async function readDataRevision(client: Tx = prisma): Promise<number> {
-  await ensureDataRevisionTable(client);
-  const rows = await client.$queryRaw<Array<{ rev: bigint | number }>>`
-    SELECT rev FROM app_data_revision WHERE id = 1
-  `;
-  return Number(rows[0]?.rev ?? 0);
+  // Read path: do not CREATE TABLE (DDL) — that burns pooler sessions and can
+  // fail under transaction mode. Writers still call ensureDataRevisionTable.
+  try {
+    const rows = await client.$queryRaw<Array<{ rev: bigint | number }>>`
+      SELECT rev FROM app_data_revision WHERE id = 1
+    `;
+    return Number(rows[0]?.rev ?? 0);
+  } catch {
+    return 0;
+  }
 }
 
 /** Bump after a successful targeted atomic write. */

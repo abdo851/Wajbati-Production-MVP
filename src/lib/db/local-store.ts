@@ -28,7 +28,13 @@ import { DRIVER_DEMOS } from "@/lib/driver-demos";
 import { LoginFailure, StoreError } from "@/lib/errors";
 import { removePrivateFile, writePrivateFile, readPrivateFile } from "@/lib/private-files";
 import { messageSharesContact } from "@/lib/contact-guard";
-import { roundMoney, serviceDateInHistory, todayInCasablanca } from "@/lib/format";
+import {
+  addCasablancaDays,
+  MEAL_HISTORY_DAYS,
+  roundMoney,
+  serviceDateInHistory,
+  todayInCasablanca,
+} from "@/lib/format";
 import { assertTransition } from "@/lib/orders";
 import type {
   ActiveDelivery,
@@ -762,13 +768,14 @@ async function safeStatusEvent(input: {
 
 async function loadGraphWithRetry() {
   let lastError: unknown;
-  for (let attempt = 0; attempt <= 3; attempt += 1) {
+  // Keep retries short — long backoff under pool exhaustion makes EMAXCONNSESSION worse.
+  for (let attempt = 0; attempt <= 1; attempt += 1) {
     try {
       return await loadGraph();
     } catch (error) {
       lastError = error;
-      if (attempt === 3) break;
-      await new Promise((resolve) => setTimeout(resolve, 2000));
+      if (attempt === 1) break;
+      await new Promise((resolve) => setTimeout(resolve, 400));
     }
   }
   throw lastError;
@@ -1691,17 +1698,55 @@ function onlyDigits(value: string): string {
 
 export const localRepository = {
   async listTodayMeals(): Promise<MealListResponse> {
-    return withDb((db) => {
-      const serviceDate = todayInCasablanca();
-      const meals = db.meals
-        .filter((meal) => {
-          const chef = chefFor(db, meal.chefId);
-          return Boolean(chef) && chef?.approvalStatus === "approved" && meal.isPublished === true && mealIsVisible(meal) && serviceDateInHistory(meal.serviceDate);
-        })
-        .sort((a, b) => Number(b.remainingQuantity > 0) - Number(a.remainingQuantity > 0))
-        .map((meal) => toPublicMeal(db, meal));
-      return { serviceDate, meals };
-    }, false);
+    const serviceDate = todayInCasablanca();
+    const historyStart = addCasablancaDays(serviceDate, 1 - MEAL_HISTORY_DAYS);
+    const rows = await prisma.meal.findMany({
+      where: {
+        isPublished: true,
+        isDeleted: false,
+        isActive: true,
+        serviceDate: {
+          gte: new Date(`${historyStart}T00:00:00.000Z`),
+          lte: new Date(`${serviceDate}T00:00:00.000Z`),
+        },
+      },
+      orderBy: [{ remainingQuantity: "desc" }, { createdAt: "desc" }],
+    });
+    if (rows.length === 0) return { serviceDate, meals: [] };
+    const chefIds = [...new Set(rows.map((row) => row.chefId))];
+    const chefs = await prisma.chefProfile.findMany({
+      where: { id: { in: chefIds }, isActive: true },
+      select: {
+        id: true,
+        kitchenName: true,
+        city: true,
+        user: { select: { approvalStatus: true, isDeleted: true } },
+      },
+    });
+    const chefById = new Map(chefs.map((chef) => [chef.id, chef]));
+    const meals: PublicMeal[] = rows.flatMap((row) => {
+      const chef = chefById.get(row.chefId);
+      if (!chef || chef.user.isDeleted || chef.user.approvalStatus !== "APPROVED") return [];
+      const paths =
+        row.images?.length > 0 ? row.images : row.imageUrl ? [row.imageUrl] : [];
+      return [
+        {
+          id: row.id,
+          chefId: row.chefId,
+          title: row.title,
+          description: row.description,
+          priceMad: row.price,
+          maxQuantity: row.quantity,
+          remainingQuantity: row.remainingQuantity,
+          serviceDate: row.serviceDate.toISOString().slice(0, 10),
+          kitchenName: chef.kitchenName || "Kitchen",
+          city: chef.city ?? "",
+          photoUrl: paths.length > 0 ? `/api/meals/${row.id}/photo?i=0` : null,
+          photoUrls: paths.map((_, index) => `/api/meals/${row.id}/photo?i=${index}`),
+        },
+      ];
+    });
+    return { serviceDate, meals };
   },
 
   async placeOrder(input: PlaceOrderInput): Promise<OrderReceipt> {
