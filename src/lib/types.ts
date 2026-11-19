@@ -412,6 +412,7 @@ export type CustomerOrder = {
   customerNotes: string;
   status: OrderStatus;
   deliveryCode: string;
+  trackToken?: string;
   createdAt: string;
 };
 

@@ -4,6 +4,7 @@ import { messageSharesContact } from "@/lib/contact-guard";
 import { getRepository } from "@/lib/db";
 import { StoreError } from "@/lib/errors";
 import { handle } from "@/lib/server/http";
+import type { OrderChatPeer } from "@/lib/order-chat";
 import { parseDirectMessage, readBody } from "@/lib/validators";
 import type { AuthUser, ChatActor } from "@/lib/types";
 
@@ -30,10 +31,14 @@ export async function GET(request: Request) {
     const current = await getCurrentUser();
     const user = requireChatUser(current?.user);
     const url = new URL(request.url);
+    const peerParam = url.searchParams.get("peer");
+    const peer: OrderChatPeer | null =
+      peerParam === "chef" || peerParam === "driver" ? peerParam : null;
     const query = {
       mealId: url.searchParams.get("mealId"),
       orderId: url.searchParams.get("orderId"),
       threadId: url.searchParams.get("threadId"),
+      peer,
     };
     const repository = getRepository(current?.accessToken);
     if (query.mealId || query.orderId || query.threadId) {

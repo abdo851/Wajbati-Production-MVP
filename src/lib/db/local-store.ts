@@ -29,6 +29,13 @@ import { LoginFailure, StoreError } from "@/lib/errors";
 import { removePrivateFile, writePrivateFile, readPrivateFile } from "@/lib/private-files";
 import { messageSharesContact } from "@/lib/contact-guard";
 import {
+  canAccessOrderChat,
+  defaultOrderChatPeer,
+  orderThreadId,
+  parseOrderThreadId,
+  type OrderChatPeer,
+} from "@/lib/order-chat";
+import {
   addCasablancaDays,
   MEAL_HISTORY_DAYS,
   roundMoney,
@@ -1141,19 +1148,13 @@ function moveWallet(db: Database, ownerId: string, amountMad: number, note: Wall
   });
 }
 
-function canAccessOrderChat(actor: ChatActor, order: Order) {
-  if (actor.role === "driver" && actor.driverId && order.driverId === actor.driverId) return true;
-  if (actor.role === "customer") {
-    const phone = onlyDigits(actor.phone ?? "");
-    return phone.length >= 8 && phone === onlyDigits(order.customerPhone);
-  }
-  return false;
-}
-
 function assertThreadAccess(db: Database, actor: ChatActor, threadId: string) {
-  if (threadId.startsWith("order:")) {
-    const order = db.orders.find((item) => item.id === threadId.slice("order:".length));
-    if (!order || !canAccessOrderChat(actor, order)) throw new StoreError("Sign in to continue.", 403);
+  const orderThread = parseOrderThreadId(threadId);
+  if (orderThread) {
+    const order = db.orders.find((item) => item.id === orderThread.orderId);
+    if (!order || !canAccessOrderChat(actor, order, orderThread.peer)) {
+      throw new StoreError("Sign in to continue.", 403);
+    }
     return;
   }
   const match = /^meal:([^:]+):customer:([^:]+)$/.exec(threadId);
@@ -1165,7 +1166,14 @@ function assertThreadAccess(db: Database, actor: ChatActor, threadId: string) {
   throw new StoreError("Sign in to continue.", 403);
 }
 
-function resolveDirectThread(db: Database, actor: ChatActor, query: { mealId: string | null; orderId: string | null; threadId: string | null }) {
+type DirectThreadQuery = {
+  mealId: string | null;
+  orderId: string | null;
+  threadId: string | null;
+  peer?: OrderChatPeer | null;
+};
+
+function resolveDirectThread(db: Database, actor: ChatActor, query: DirectThreadQuery) {
   if (query.threadId) {
     assertThreadAccess(db, actor, query.threadId);
     return query.threadId;
@@ -1173,8 +1181,9 @@ function resolveDirectThread(db: Database, actor: ChatActor, query: { mealId: st
   if (query.orderId) {
     const order = db.orders.find((item) => item.id === query.orderId);
     if (!order) throw new StoreError("That order could not be found.", 404);
-    if (!canAccessOrderChat(actor, order)) throw new StoreError("Sign in to continue.", 403);
-    return `order:${order.id}`;
+    const peer = query.peer ?? defaultOrderChatPeer(actor.role);
+    if (!canAccessOrderChat(actor, order, peer)) throw new StoreError("Sign in to continue.", 403);
+    return orderThreadId(order.id, peer);
   }
   if (query.mealId) {
     const meal = db.meals.find((item) => item.id === query.mealId);
@@ -1198,15 +1207,30 @@ function toDirectThread(db: Database, actor: ChatActor, threadId: string): Direc
     const meal = db.meals.find((item) => item.id === mealId);
     const chef = meal ? db.chefs.find((item) => item.id === meal.chefId) : undefined;
     title = meal?.title ?? "";
-    peerName = actor.role === "chef" ? (messages.find((item) => item.senderRole === "customer")?.senderName ?? "") : (chef?.kitchenName ?? "");
-  } else if (threadId.startsWith("order:")) {
-    orderId = threadId.slice("order:".length);
-    const order = db.orders.find((item) => item.id === orderId);
-    const meal = order ? db.meals.find((item) => item.id === order.mealId) : undefined;
-    mealId = order?.mealId ?? mealId;
-    title = meal?.title ?? "";
-    if (actor.role === "driver") peerName = order?.customerName ?? "";
-    else peerName = db.drivers.find((item) => item.id === order?.driverId)?.fullName ?? "";
+    peerName =
+      actor.role === "chef"
+        ? (messages.find((item) => item.senderRole === "customer")?.senderName ?? "")
+        : (chef?.kitchenName ?? "");
+  } else {
+    const parsed = parseOrderThreadId(threadId);
+    if (parsed) {
+      orderId = parsed.orderId;
+      const order = db.orders.find((item) => item.id === orderId);
+      const meal = order ? db.meals.find((item) => item.id === order.mealId) : undefined;
+      mealId = order?.mealId ?? mealId;
+      title = meal?.title ?? "";
+      if (parsed.peer === "chef") {
+        const chef = order ? db.chefs.find((item) => item.id === order.chefId) : undefined;
+        peerName =
+          actor.role === "chef"
+            ? (order?.customerName ?? "")
+            : (chef?.kitchenName ?? "");
+      } else if (actor.role === "driver") {
+        peerName = order?.customerName ?? "";
+      } else {
+        peerName = db.drivers.find((item) => item.id === order?.driverId)?.fullName ?? "";
+      }
+    }
   }
   return {
     threadId,
@@ -1340,6 +1364,7 @@ function ordersForPhone(db: Database, phone: string): CustomerOrder[] {
         customerNotes: order.customerNotes,
         status: order.status,
         deliveryCode: order.deliveryCode,
+        trackToken: order.trackToken,
         createdAt: order.createdAt,
       };
     });
@@ -2888,7 +2913,7 @@ export const localRepository = {
     }, true);
   },
 
-  async openDirectThread(actor: ChatActor, query: { mealId: string | null; orderId: string | null; threadId: string | null }): Promise<DirectThread> {
+  async openDirectThread(actor: ChatActor, query: DirectThreadQuery): Promise<DirectThread> {
     return withDb((db) => toDirectThread(db, actor, resolveDirectThread(db, actor, query)), false);
   },
 
@@ -2908,29 +2933,36 @@ export const localRepository = {
     }, false);
   },
 
-  async sendDirectMessage(actor: ChatActor, input: { body: string; mealId: string | null; orderId: string | null; threadId: string | null }): Promise<DirectThread> {
+  async sendDirectMessage(actor: ChatActor, input: DirectThreadQuery & { body: string }): Promise<DirectThread> {
     if (messageSharesContact(input.body)) {
       throw new StoreError("Phone numbers, emails, and links are not allowed in chat.", 400);
     }
-    return withDb((db) => {
-      const threadId = resolveDirectThread(db, actor, input);
-      const mealMatch = /^meal:([^:]+):customer:([^:]+)$/.exec(threadId);
-      const order = threadId.startsWith("order:") ? db.orders.find((item) => item.id === threadId.slice("order:".length)) : undefined;
-      const mealId = mealMatch?.[1] ?? order?.mealId ?? input.mealId ?? "";
-      db.direct_messages.push({
-        id: randomUUID(),
-        threadId,
-        mealId,
-        orderId: order?.id ?? null,
-        customerId: mealMatch?.[2] ?? (actor.role === "customer" ? actor.id : null),
-        senderRole: actor.role === "chef" || actor.role === "driver" ? actor.role : "customer",
-        senderId: actor.id,
-        senderName: actor.fullName,
-        body: input.body,
-        createdAt: new Date().toISOString(),
-      });
-      return toDirectThread(db, actor, threadId);
-    }, true);
+    // Serialize graph chat writes across instances so a concurrent atomic order
+    // bump or sibling message save cannot silently drop this message via 409.
+    return withAdvisoryLock("direct-chat", async () =>
+      withDb((db) => {
+        const threadId = resolveDirectThread(db, actor, input);
+        const mealMatch = /^meal:([^:]+):customer:([^:]+)$/.exec(threadId);
+        const parsedOrder = parseOrderThreadId(threadId);
+        const order = parsedOrder
+          ? db.orders.find((item) => item.id === parsedOrder.orderId)
+          : undefined;
+        const mealId = mealMatch?.[1] ?? order?.mealId ?? input.mealId ?? "";
+        db.direct_messages.push({
+          id: randomUUID(),
+          threadId,
+          mealId,
+          orderId: order?.id ?? null,
+          customerId: mealMatch?.[2] ?? (actor.role === "customer" ? actor.id : null),
+          senderRole: actor.role === "chef" || actor.role === "driver" ? actor.role : "customer",
+          senderId: actor.id,
+          senderName: actor.fullName,
+          body: input.body,
+          createdAt: new Date().toISOString(),
+        });
+        return toDirectThread(db, actor, threadId);
+      }, true),
+    );
   },
 
   async updateCommissionSettings(input: CommissionSettings): Promise<CommissionSettings> {

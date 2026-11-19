@@ -368,14 +368,21 @@ export function parseLogin(value: unknown): { email: string; password: string; d
   return { email, password: secret, desk: body.desk };
 }
 
-export function parseDirectMessage(value: unknown): { body: string; mealId: string | null; orderId: string | null; threadId: string | null } {
+export function parseDirectMessage(value: unknown): {
+  body: string;
+  mealId: string | null;
+  orderId: string | null;
+  threadId: string | null;
+  peer: "chef" | "driver" | null;
+} {
   const record = asRecord(value);
   const body = text(record.body, "Message", 1, 1000);
   const mealId = record.mealId == null || record.mealId === "" ? null : text(record.mealId, "Meal", 8, 80);
   const orderId = record.orderId == null || record.orderId === "" ? null : text(record.orderId, "Order", 8, 80);
   const threadId = record.threadId == null || record.threadId === "" ? null : text(record.threadId, "Thread", 8, 160);
+  const peer = record.peer === "chef" || record.peer === "driver" ? record.peer : null;
   if (!mealId && !orderId && !threadId) throw new StoreError("That conversation could not be found.", 404);
-  return { body, mealId, orderId, threadId };
+  return { body, mealId, orderId, threadId, peer };
 }
 
 export function parseCommissionSettings(value: unknown): { chefCommissionMad: number; driverCommissionMad: number } {

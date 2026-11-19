@@ -240,7 +240,7 @@ function Route({
                       {t("driver.refuse")}
                     </button>
                   ) : null}
-                  <SecureChat orderId={job.id} />
+                  <SecureChat orderId={job.id} peer="driver" />
                 </div>
               </JobCard>
             ))}

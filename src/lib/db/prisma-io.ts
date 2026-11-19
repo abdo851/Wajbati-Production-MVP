@@ -150,8 +150,19 @@ function receiverFor(row: Database["direct_messages"][number], db: Database, use
     if (other && userIds.has(other)) return other;
   }
   if (row.threadId.startsWith("order:")) {
-    const orderId = row.orderId || row.threadId.slice("order:".length);
+    const chefPeer = /^order:([^:]+):chef$/.exec(row.threadId);
+    const orderId = row.orderId || chefPeer?.[1] || row.threadId.slice("order:".length);
     const order = db.orders.find((item) => item.id === orderId);
+    if (chefPeer) {
+      const chef = order ? db.chefs.find((item) => item.id === order.chefId) : undefined;
+      if (chef?.profileId && userIds.has(chef.profileId) && chef.profileId !== senderId) return chef.profileId;
+      const phone = (order?.customerPhone ?? "").replace(/\D/g, "");
+      const customer = db.profiles.find(
+        (item) => phone.length >= 8 && (item.phone ?? "").replace(/\D/g, "") === phone,
+      );
+      if (customer && userIds.has(customer.id) && customer.id !== senderId) return customer.id;
+      return senderId;
+    }
     if (order?.driverId && senderId !== order.driverId && userIds.has(order.driverId)) return order.driverId;
     const phone = (order?.customerPhone ?? "").replace(/\D/g, "");
     const customer = db.profiles.find((item) => phone.length >= 8 && (item.phone ?? "").replace(/\D/g, "") === phone);
@@ -365,7 +376,13 @@ async function writeGraph(tx: Writer, db: Database) {
 
   const messages: Prisma.MessageCreateManyInput[] = [];
   for (const row of db.direct_messages) {
-    if (!userIds.has(row.senderId)) continue;
+    // Fail closed: never silently drop chat rows during a full-graph rewrite.
+    if (!userIds.has(row.senderId)) {
+      throw new StoreError(
+        "تعذر حفظ الرسالة لأن المرسل غير موجود في دفتر المستخدمين.",
+        409,
+      );
+    }
     messages.push({
       id: row.id,
       senderId: row.senderId,

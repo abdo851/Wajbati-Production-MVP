@@ -176,6 +176,9 @@ export async function atomicAdvanceDelivery(input: {
 /**
  * OTP-confirmed delivery: increments attempts, verifies hash, sets delivered.
  * Does not touch wallets (settlement is separate).
+ *
+ * Failed attempts must commit independently of the mismatch error — otherwise a
+ * thrown StoreError would roll back otpAttempts and allow unlimited guessing.
  */
 export async function atomicDeliverWithOtp(input: {
   orderId: string;
@@ -184,7 +187,8 @@ export async function atomicDeliverWithOtp(input: {
   verify: (given: string, storedHash: string) => boolean;
 }): Promise<void> {
   assertDatabaseWriteAllowed("prisma");
-  await prisma.$transaction(async (tx) => {
+
+  const attempt = await prisma.$transaction(async (tx) => {
     const order = await tx.order.findUnique({ where: { id: input.orderId } });
     if (!order || order.driverId !== input.driverId) {
       throw new StoreError("That delivery is not yours.", 404);
@@ -202,14 +206,19 @@ export async function atomicDeliverWithOtp(input: {
 
     const hash = order.otpHash ?? "";
     const matched = hash ? input.verify(input.code, hash) : order.otpCode === input.code;
-    if (!matched) {
-      await tx.order.update({
-        where: { id: input.orderId },
-        data: { otpAttempts: attempts },
-      });
-      throw new StoreError("That code does not match.", 409);
-    }
+    await tx.order.update({
+      where: { id: input.orderId },
+      data: { otpAttempts: attempts },
+    });
+    await bumpDataRevision(tx);
+    return { matched, attempts };
+  });
 
+  if (!attempt.matched) {
+    throw new StoreError("That code does not match.", 409);
+  }
+
+  await prisma.$transaction(async (tx) => {
     const updated = await tx.order.updateMany({
       where: {
         id: input.orderId,
@@ -219,7 +228,6 @@ export async function atomicDeliverWithOtp(input: {
       data: {
         flowStatus: "delivered",
         status: "DELIVERED",
-        otpAttempts: attempts,
       },
     });
     if (updated.count !== 1) {

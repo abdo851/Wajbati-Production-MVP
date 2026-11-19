@@ -3,19 +3,17 @@
 import { useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { CustomerOrders } from "@/components/customer-orders";
 import { PasswordField } from "@/components/password-field";
 import { ProfileExtras } from "@/components/profile-extras";
-import { SecureChat } from "@/components/secure-chat";
 import { useI18n } from "@/components/language";
 import { useSession } from "@/components/use-session";
-import { inputClass, primaryButtonClass, quietButtonClass, StatusPill } from "@/components/ui";
-import { formatMad, formatWhen } from "@/lib/format";
-import { readReceipts, writeCheckout } from "@/lib/guest";
+import { inputClass, primaryButtonClass, quietButtonClass } from "@/components/ui";
+import { writeCheckout } from "@/lib/guest";
 import { readJson } from "@/lib/read-json";
-import type { CustomerOrder, OrderReceipt } from "@/lib/types";
 
 export function AccountPanel() {
-  const { t, lang } = useI18n();
+  const { t } = useI18n();
   const { session, reload } = useSession();
   const router = useRouter();
   const [mode, setMode] = useState<"signin" | "create">("signin");
@@ -28,18 +26,25 @@ export function AccountPanel() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
-  const [deviceOrders, setDeviceOrders] = useState<OrderReceipt[]>([]);
-  const [orders, setOrders] = useState<CustomerOrder[] | null>(null);
+
+  const customer = session?.user?.role === "customer" ? session.user : null;
+  const staff =
+    session?.user?.role === "chef" || session?.user?.role === "driver" || session?.user?.role === "admin"
+      ? session.user
+      : null;
+  const deskHref =
+    staff?.role === "chef"
+      ? "/chef"
+      : staff?.role === "driver"
+        ? "/driver/dashboard"
+        : staff?.role === "admin"
+          ? "/admin"
+          : null;
 
   useEffect(() => {
-    const timeout = window.setTimeout(() => {
-      setDeviceOrders(readReceipts());
-      if (window.location.hash === "#orders") {
-        document.getElementById("orders")?.scrollIntoView({ behavior: "smooth" });
-      }
-    }, 0);
-    return () => window.clearTimeout(timeout);
-  }, [t]);
+    if (!deskHref) return;
+    router.replace(deskHref);
+  }, [deskHref, router]);
 
   useEffect(() => {
     const user = session?.user;
@@ -47,13 +52,6 @@ export function AccountPanel() {
     const timeout = window.setTimeout(() => {
       setFullName(user.fullName);
       setPhone(user.phone ?? "");
-      void fetch("/api/account/orders", { cache: "no-store" })
-        .then(async (response) => {
-          if (!response.ok) return;
-          const body = await readJson<{ orders: CustomerOrder[] }>(response);
-          setOrders(body.orders);
-        })
-        .catch(() => setOrders([]));
     }, 0);
     return () => window.clearTimeout(timeout);
   }, [session]);
@@ -111,13 +109,16 @@ export function AccountPanel() {
     router.refresh();
   }
 
-  const customer = session?.user?.role === "customer" ? session.user : null;
-  const staff =
-    session?.user?.role === "chef" || session?.user?.role === "driver" || session?.user?.role === "admin"
-      ? session.user
-      : null;
-  const deskHref =
-    staff?.role === "chef" ? "/chef" : staff?.role === "driver" ? "/driver/dashboard" : staff?.role === "admin" ? "/admin" : null;
+  if (staff && deskHref) {
+    return (
+      <main className="mx-auto w-full max-w-lg flex-1 px-4 py-8 sm:px-6 sm:py-10">
+        <p className="text-sm text-[color:var(--muted-strong)]">{t("account.redirecting")}</p>
+        <Link href={deskHref} className={`${primaryButtonClass} mt-4 inline-flex`}>
+          {t("account.openDesk")}
+        </Link>
+      </main>
+    );
+  }
 
   return (
     <main className="mx-auto w-full max-w-lg flex-1 px-4 py-8 sm:px-6 sm:py-10">
@@ -126,19 +127,8 @@ export function AccountPanel() {
       ) : null}
       <h1 className="mt-1 font-display text-[1.85rem] leading-tight text-ink sm:text-4xl">{t("account.title")}</h1>
       <p className="mt-3 text-sm leading-7 text-[color:var(--muted-strong)] sm:text-base sm:leading-8">
-        {customer ? t("account.body") : staff ? t("account.staffHint") : t("account.guestLead")}
+        {customer ? t("account.body") : t("account.guestLead")}
       </p>
-
-      {staff && deskHref ? (
-        <div className="mt-6 rounded-[1.35rem] border border-line bg-card p-5">
-          <Link href={deskHref} className={`${primaryButtonClass} w-full`}>
-            {t("account.openDesk")}
-          </Link>
-          <button type="button" className={`${quietButtonClass} mt-3 w-full`} onClick={() => void signOut()}>
-            {t("menu.signOut")}
-          </button>
-        </div>
-      ) : null}
 
       {customer ? (
         <form onSubmit={saveProfile} className="mt-6 space-y-4 rounded-[1.35rem] border border-line bg-card p-5">
@@ -215,7 +205,10 @@ export function AccountPanel() {
           </button>
           <div className="border-t border-line/80 pt-4 text-center">
             <p className="text-sm text-[color:var(--muted-strong)]">{t("account.joinRoles")}</p>
-            <Link href="/join" className="mt-2 inline-flex min-h-10 items-center justify-center text-sm font-semibold text-gold-deep underline-offset-4 hover:underline">
+            <Link
+              href="/join"
+              className="mt-2 inline-flex min-h-10 items-center justify-center text-sm font-semibold text-gold-deep underline-offset-4 hover:underline"
+            >
               {t("account.joinRolesCta")}
             </Link>
           </div>
@@ -223,55 +216,11 @@ export function AccountPanel() {
       ) : null}
 
       {customer ? <ProfileExtras role={session!.user!.role} /> : null}
-      <section id="orders" className="mt-8">
-        <h2 className="font-display text-2xl text-ink sm:text-3xl">{t("menu.orders")}</h2>
-        {orders && orders.length === 0 ? (
-          <p className="mt-3 text-sm text-[color:var(--muted-strong)]">{t("account.empty")}</p>
-        ) : null}
-        <ul className="mt-3 space-y-3">
-          {(orders ?? []).map((order) => (
-            <li key={order.id} className="rounded-[1.25rem] border border-line bg-card p-4">
-              <div className="flex items-start justify-between gap-3">
-                <p className="font-medium">
-                  {order.quantity} × {order.mealTitle}
-                </p>
-                <StatusPill status={order.status} />
-              </div>
-              <p className="mt-1 text-sm text-[color:var(--muted-strong)]">
-                {order.kitchenName} · {formatMad(order.totalMad, lang)} · {formatWhen(order.createdAt, lang)}
-              </p>
-              {order.deliveryCode ? (
-                <p className="mt-2 font-display text-3xl tracking-[0.25em]">{order.deliveryCode}</p>
-              ) : null}
-              {order.status === "assigned" || order.status === "picked_up" || order.status === "delivered" ? (
-                <div className="mt-4">
-                  <SecureChat orderId={order.id} />
-                </div>
-              ) : null}
-            </li>
-          ))}
-        </ul>
-        <h3 className="mt-6 text-lg font-medium text-ink">{t("account.device")}</h3>
-        <p className="mt-1 text-sm text-[color:var(--muted-strong)]">{t("account.guestHint")}</p>
-        {deviceOrders.length === 0 ? (
-          <p className="mt-3 text-sm text-[color:var(--muted-strong)]">{t("account.empty")}</p>
-        ) : null}
-        <ul className="mt-3 space-y-3">
-          {deviceOrders.map((order) => (
-            <li key={order.id} className="rounded-[1.25rem] border border-line bg-card p-4">
-              <p className="font-medium">
-                {order.quantity} × {order.mealTitle}
-              </p>
-              <p className="mt-1 text-sm text-[color:var(--muted-strong)]">
-                {order.kitchenName} · {formatMad(order.totalMad, lang)}
-              </p>
-              {order.deliveryCode ? (
-                <p className="mt-2 font-display text-3xl tracking-[0.25em]">{order.deliveryCode}</p>
-              ) : null}
-            </li>
-          ))}
-        </ul>
-      </section>
+      {customer ? (
+        <div className="mt-8">
+          <CustomerOrders compact />
+        </div>
+      ) : null}
     </main>
   );
 }

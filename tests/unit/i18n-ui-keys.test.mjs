@@ -5,15 +5,20 @@ import { translate } from "../../src/lib/i18n.ts";
 const keys = [
   "home.ctaMeals",
   "home.whyTitle",
-  "home.partnerCta",
+  "home.codHint",
   "board.emptyTitle",
   "board.emptyBody",
   "account.guestLead",
   "account.joinRolesCta",
-  "account.staffHint",
   "join.chefCta",
   "join.driverCta",
   "nav.join",
+  "nav.orders",
+  "nav.account",
+  "orders.title",
+  "orders.otpHint",
+  "chat.withChef",
+  "chat.withDriver",
 ];
 
 test("ui refinement keys resolve in ar/en/fr", () => {

@@ -1,5 +1,5 @@
 import { EmailBanner } from "@/components/email-banner";
-import { HomeIntro } from "@/components/home-intro";
+import { HomeGuide, HomeIntro } from "@/components/home-intro";
 import { MealBoard } from "@/components/meal-board";
 
 export default function HomePage() {
@@ -8,6 +8,7 @@ export default function HomePage() {
       <EmailBanner />
       <HomeIntro />
       <MealBoard />
+      <HomeGuide />
     </main>
   );
 }

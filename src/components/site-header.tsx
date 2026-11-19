@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useEffect, useId, useState } from "react";
 import { LanguageDialog, LanguageMenu, useI18n } from "@/components/language";
-import { VISIT_KEY } from "@/components/customer-welcome";
 import { PwaInstallButton } from "@/components/pwa-install-button";
 import { Sidebar } from "@/components/sidebar";
 import { useSession } from "@/components/use-session";
@@ -79,45 +78,22 @@ export function SiteHeader() {
   const { t } = useI18n();
   const { session } = useSession();
   const [open, setOpen] = useState(false);
-  const [intent, setIntent] = useState<string | null>(null);
-  const [intentReady, setIntentReady] = useState(false);
   const [brand, setBrand] = useState("Righ");
   const user = session?.user ?? null;
   const name = user?.fullName;
-  const deskHref = user?.role === "chef" ? "/chef" : user?.role === "driver" ? "/driver" : null;
-  const staff = user?.role === "chef" || user?.role === "driver" || user?.role === "admin";
-  // Only apply localStorage-driven hide after mount so SSR and first client paint match.
-  const hideMenu = intentReady && intent === "order" && !staff;
+  const deskHref =
+    user?.role === "chef" ? "/chef" : user?.role === "driver" ? "/driver/dashboard" : null;
 
   useEffect(() => {
     const timeout = window.setTimeout(() => setBrand(getDeviceBrandName()), 0);
     return () => window.clearTimeout(timeout);
   }, []);
 
-  useEffect(() => {
-    function sync() {
-      try {
-        setIntent(window.localStorage.getItem(VISIT_KEY));
-      } catch {
-        setIntent(null);
-      } finally {
-        setIntentReady(true);
-      }
-    }
-    sync();
-    window.addEventListener("wajbati-visit", sync);
-    window.addEventListener("storage", sync);
-    return () => {
-      window.removeEventListener("wajbati-visit", sync);
-      window.removeEventListener("storage", sync);
-    };
-  }, []);
-
   return (
     <>
       <header className="glass sticky top-0 z-20 border-b border-line/60 shadow-[0_1px_0_rgba(23,19,15,0.03)]">
         <div className="mx-auto flex h-14 max-w-6xl items-center gap-1.5 px-2.5 sm:gap-2 sm:px-5">
-          <MenuButton open={open} onClick={() => setOpen(true)} visuallyHidden={hideMenu} />
+          <MenuButton open={open} onClick={() => setOpen(true)} />
           <Link href="/" className="flex shrink-0 items-center" aria-label={brand}>
             <span className="[&>svg]:size-8 sm:[&>svg]:size-9">
               <Mark />

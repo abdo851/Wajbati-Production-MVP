@@ -10,7 +10,7 @@ import { cityCenter, type LatLng } from "@/lib/geo";
 const DispatchMapDialog = dynamic(() => import("@/components/dispatch-map-dialog").then((mod) => mod.DispatchMapDialog), { ssr: false });
 import { PhotoGallery, PenButton } from "@/components/photo-gallery";
 import { ProfilePhoto } from "@/components/site-header";
-import { SecureInbox } from "@/components/secure-chat";
+import { SecureChat, SecureInbox } from "@/components/secure-chat";
 import { WalletPanel } from "@/components/wallet-panel";
 import { inputClass, LiveDot, primaryButtonClass, quietButtonClass, StatusPill } from "@/components/ui";
 import { useI18n } from "@/components/language";
@@ -579,6 +579,9 @@ function OrderList({ orders, onChanged, mapCenter, mapLabel }: { orders: ChefOrd
                     {t("chef.cancel")}
                   </button>
                 ) : null}
+              </div>
+              <div className="mt-4">
+                <SecureChat orderId={order.id} peer="chef" />
               </div>
             </li>
           ))}

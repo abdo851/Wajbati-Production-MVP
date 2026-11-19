@@ -92,9 +92,9 @@ export function MealBoard() {
         {(loading && !data) || !minSplashPassed ? <SplashScreen key="splash" /> : null}
       </AnimatePresence>
       {!loading && !error && meals.length === 0 ? (
-        <div className="mt-8 rounded-[1.35rem] border border-dashed border-line bg-surface/70 px-5 py-11 text-center">
-          <p className="font-display text-xl text-ink">{t("board.emptyTitle")}</p>
-          <p className="mx-auto mt-3 max-w-sm text-sm leading-7 text-[color:var(--muted-strong)]">
+        <div className="mt-8 rounded-[1.35rem] border border-dashed border-line/90 bg-gradient-to-b from-white/80 to-surface/80 px-5 py-12 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]">
+          <p className="font-display text-xl text-ink sm:text-2xl">{t("board.emptyTitle")}</p>
+          <p className="mx-auto mt-3 max-w-sm text-sm leading-7 text-[color:var(--muted-strong)] sm:text-[0.95rem]">
             {t("board.emptyBody")}
           </p>
         </div>

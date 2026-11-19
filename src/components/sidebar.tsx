@@ -78,10 +78,18 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
 
         {user && (user.role === "chef" || user.role === "driver") ? (
           <div className="mt-6 grid gap-2">
-            <Link href={user.role === "chef" ? "/chef" : "/driver"} className={`${itemClass} font-semibold`} onClick={onClose}>
+            <Link
+              href={user.role === "chef" ? "/chef" : "/driver/dashboard"}
+              className={`${itemClass} font-semibold`}
+              onClick={onClose}
+            >
               {t("sidebar.myProfile")}
             </Link>
-            <Link href={user.role === "chef" ? "/chef#orders" : "/driver#orders"} className={`${itemClass} font-semibold`} onClick={onClose}>
+            <Link
+              href={user.role === "chef" ? "/chef#orders" : "/driver/dashboard#orders"}
+              className={`${itemClass} font-semibold`}
+              onClick={onClose}
+            >
               {t("menu.orders")}
             </Link>
             <button type="button" className={`${itemClass} text-start font-semibold`} onClick={() => void signOut()}>
@@ -148,7 +156,7 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
                         <Link href="/account" className={nestedClass} onClick={onClose}>
                           {t("menu.account")}
                         </Link>
-                        <Link href="/account#orders" className={nestedClass} onClick={onClose}>
+                        <Link href="/orders" className={nestedClass} onClick={onClose}>
                           {t("menu.orders")}
                         </Link>
                         <button type="button" className={nestedClass} onClick={() => void signOut()}>
