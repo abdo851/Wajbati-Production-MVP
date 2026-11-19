@@ -208,7 +208,7 @@ export function AccountPanel() {
                 <StatusPill status={order.status} />
               </div>
               <p className="mt-1 text-sm text-muted">
-                {order.kitchenName} · {formatMad(order.totalMad + order.deliveryFeeMad, lang)} · {formatWhen(order.createdAt, lang)}
+                {order.kitchenName} · {formatMad(order.totalMad, lang)} · {formatWhen(order.createdAt, lang)}
               </p>
               {order.deliveryCode ? <p className="mt-2 font-display text-3xl tracking-[0.25em]">{order.deliveryCode}</p> : null}
               {order.status === "assigned" || order.status === "picked_up" || order.status === "delivered" ? (
@@ -229,7 +229,7 @@ export function AccountPanel() {
                 {order.quantity} × {order.mealTitle}
               </p>
               <p className="mt-1 text-sm text-muted">
-                {order.kitchenName} · {formatMad(order.totalMad + order.deliveryFeeMad, lang)}
+                {order.kitchenName} · {formatMad(order.totalMad, lang)}
               </p>
               {order.deliveryCode ? <p className="mt-2 font-display text-3xl tracking-[0.25em]">{order.deliveryCode}</p> : null}
             </li>

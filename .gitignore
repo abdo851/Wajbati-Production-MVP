@@ -60,3 +60,6 @@ tsconfig.tsbuildinfo
 
 .vercel
 .env*
+
+# E2E test fixtures
+tmp-e2e/

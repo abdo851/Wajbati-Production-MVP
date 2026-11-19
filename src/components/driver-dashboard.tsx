@@ -227,6 +227,19 @@ function Route({
                       onDeliver={(code) => void post("/api/driver/status", { orderId: job.id, action: "deliver", code })}
                     />
                   )}
+                  {job.status === "assigned" || job.status === "picked_up" ? (
+                    <button
+                      type="button"
+                      className="h-10 rounded-full border border-terracotta/50 text-xs font-semibold text-terracotta-deep transition hover:bg-terracotta/5"
+                      disabled={busy === job.id}
+                      onClick={() => {
+                        if (!window.confirm(t("driver.refuseConfirm"))) return;
+                        void post("/api/driver/refuse", { orderId: job.id, reason: "رفض الاستلام" });
+                      }}
+                    >
+                      {t("driver.refuse")}
+                    </button>
+                  ) : null}
                   <SecureChat orderId={job.id} />
                 </div>
               </JobCard>
@@ -336,9 +349,7 @@ function JobCard({ job, children }: { job: DeliveryJob; children?: ReactNode }) 
         </div>
       </dl>
       <p className="mt-2 text-sm">{t("pay.cash")}</p>
-      <p className="mt-2 text-sm">
-        {t("driver.feeLine", { fee: formatMad(job.deliveryFeeMad), commission: formatMad(job.driverCommissionMad), net: formatMad(job.driverNetMad) })}
-      </p>
+      <p className="mt-2 text-sm text-muted">{t("driver.feeLine")}</p>
       <div className="mt-3">
         <button type="button" className={quietButtonClass} onClick={() => setMapOpen(true)}>
           <span className="inline-flex items-center gap-1.5">

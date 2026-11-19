@@ -4,6 +4,8 @@ import { SESSION_COOKIE, sessionCookieOptions, warnIfSessionSecretMissing } from
 import { LoginFailure } from "@/lib/errors";
 import { handle } from "@/lib/server/http";
 import { parseLogin, readBody } from "@/lib/validators";
+import { checkRateLimitAsync, clientKey } from "@/lib/rate-limit";
+import { StoreError } from "@/lib/errors";
 
 function failureReason(error: unknown) {
   if (error instanceof LoginFailure) return error.reason;
@@ -14,6 +16,9 @@ function failureReason(error: unknown) {
 
 export async function POST(request: Request) {
   return handle(async () => {
+    if (!(await checkRateLimitAsync(`login:${clientKey(request)}`, 5, 60_000, "closed"))) {
+      throw new StoreError("محاولات كثيرة، حاول بعد دقيقة.", 429);
+    }
     const input = parseLogin(await readBody(request));
     console.error("LOGIN ATTEMPT", input.email);
     warnIfSessionSecretMissing();

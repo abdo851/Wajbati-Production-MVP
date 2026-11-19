@@ -27,11 +27,14 @@ enum OrderStatus {
   ACCEPTED
   DELIVERED
   CANCELLED
+  REFUSED
+  NOT_REACHABLE
 }
 
 enum WalletTxnType {
   TOPUP
   COMMISSION
+  PENALTY
 }
 
 model User {
@@ -138,6 +141,10 @@ model Order {
   status               OrderStatus
   flowStatus           String
   otpCode              String      @map("otp_code")
+  otpHash              String?
+  otpExpiry            DateTime?
+  otpAttempts          Int         @default(0)
+  refuseReason         String?
   address              String
   deliveryLat          Float?
   deliveryLng          Float?
@@ -150,6 +157,8 @@ model Order {
   commissionMad        Float
   deliveryFeeMad       Float
   driverCommissionMad  Float
+  chefServiceFee       Float?
+  driverCommission     Float?
   customerEmail        String?
   paymentMethod        String
   paymentStatus        String
@@ -230,4 +239,38 @@ model PlatformSetting {
   id                  String @id @default("default")
   chefCommissionMad   Float  @default(1)
   driverCommissionMad Float  @default(1)
+}
+
+/// Operational tables — migration prepared but not applied in Phase 2.
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String
+  actorEmail String
+  action     String
+  entityType String
+  entityId   String
+  metadata   String?
+  createdAt  DateTime @default(now())
+
+  @@index([actorId])
+  @@index([entityType, entityId])
+}
+
+model OrderStatusEvent {
+  id         String   @id @default(cuid())
+  orderId    String
+  fromStatus String
+  toStatus   String
+  actorRole  String
+  actorId    String?
+  reason     String?
+  createdAt  DateTime @default(now())
+
+  @@index([orderId])
+}
+
+model RateLimitBucket {
+  key         String   @id
+  windowStart DateTime
+  count       Int
 }

@@ -74,8 +74,7 @@ export function TrackPanel({ token }: { token: string }) {
           <p className="text-base">
             {t("order.payLine", {
               meal: formatMad(order.totalMad, lang),
-              delivery: formatMad(order.deliveryFeeMad, lang),
-              total: formatMad(order.totalMad + order.deliveryFeeMad, lang),
+              total: formatMad(order.totalMad, lang),
             })}
           </p>
           {order.customerNotes ? <p className="text-base">{order.customerNotes}</p> : null}

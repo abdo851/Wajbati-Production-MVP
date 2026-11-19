@@ -2,10 +2,19 @@ import { randomUUID } from "crypto";
 import type { Prisma } from "@prisma/client";
 import { roundMoney } from "@/lib/format";
 import type { Database } from "@/lib/db/local-store";
+import { assertAndBumpDataRevision, readDataRevision } from "@/lib/db/data-revision";
 import { prisma } from "@/lib/db/prisma";
+import { StoreError } from "@/lib/errors";
 
 type AppOrderStatus = Database["orders"][number]["status"];
 type Writer = Prisma.TransactionClient;
+
+/** Tracks the DB data-revision observed when a graph was loaded (stale-save guard). */
+const graphRevisions = new WeakMap<Database, number>();
+
+export function graphDataRevision(db: Database): number | undefined {
+  return graphRevisions.get(db);
+}
 
 let adminPasswordOverride = false;
 /** Allows the NEXT graph persistence to accept a new admin password (secure update path). */
@@ -13,13 +22,15 @@ export function authorizeAdminPasswordWrite() {
   adminPasswordOverride = true;
 }
 
-const ORDER_STATUS: Record<AppOrderStatus, "PENDING" | "PREPARING" | "READY" | "ACCEPTED" | "DELIVERED" | "CANCELLED"> = {
+const ORDER_STATUS: Record<AppOrderStatus, "PENDING" | "PREPARING" | "READY" | "ACCEPTED" | "DELIVERED" | "CANCELLED" | "REFUSED" | "NOT_REACHABLE"> = {
   pending: "PREPARING",
   confirmed: "READY",
   assigned: "ACCEPTED",
   picked_up: "ACCEPTED",
   delivered: "DELIVERED",
   cancelled: "CANCELLED",
+  refused: "REFUSED",
+  not_reachable: "NOT_REACHABLE",
 };
 
 const FLOW_FROM_ENUM: Record<string, AppOrderStatus> = {
@@ -29,6 +40,8 @@ const FLOW_FROM_ENUM: Record<string, AppOrderStatus> = {
   ACCEPTED: "assigned",
   DELIVERED: "delivered",
   CANCELLED: "cancelled",
+  REFUSED: "refused",
+  NOT_REACHABLE: "not_reachable",
 };
 
 function missingEmail(id: string) {
@@ -107,15 +120,19 @@ function contentTypeOf(value: string): "image/jpeg" | "image/png" | "image/webp"
 }
 
 function flowOf(value: string, fallback: string): AppOrderStatus {
-  if (value === "pending" || value === "confirmed" || value === "assigned" || value === "picked_up" || value === "delivered" || value === "cancelled") {
+  if (
+    value === "pending" ||
+    value === "confirmed" ||
+    value === "assigned" ||
+    value === "picked_up" ||
+    value === "delivered" ||
+    value === "cancelled" ||
+    value === "refused" ||
+    value === "not_reachable"
+  ) {
     return value;
   }
   return FLOW_FROM_ENUM[fallback] ?? "pending";
-}
-
-function poolerTransactionError(error: unknown) {
-  const message = error instanceof Error ? error.message : "";
-  return /transaction|pooler|pgbouncer|prepared statement/i.test(message);
 }
 
 async function insertMany<T>(rows: T[], write: (rows: T[]) => Promise<unknown>) {
@@ -308,6 +325,12 @@ async function writeGraph(tx: Writer, db: Database) {
       commissionMad: order.commissionMad,
       deliveryFeeMad: order.deliveryFeeMad,
       driverCommissionMad: order.driverCommissionMad,
+      chefServiceFee: order.chefServiceFee ?? null,
+      driverCommission: order.driverCommission ?? null,
+      otpHash: order.otpHash ?? null,
+      otpExpiry: asTime(order.otpExpiry),
+      otpAttempts: order.otpAttempts ?? 0,
+      refuseReason: order.refuseReason ?? null,
       customerEmail: order.customerEmail,
       paymentMethod: order.paymentMethod,
       paymentStatus: order.paymentStatus,
@@ -334,7 +357,7 @@ async function writeGraph(tx: Writer, db: Database) {
       id: item.id,
       userId: item.ownerId,
       amount: item.amountMad,
-      type: item.note === "commission" ? "COMMISSION" : "TOPUP",
+      type: item.note === "commission" ? "COMMISSION" : item.note === "penalty" ? "PENALTY" : "TOPUP",
       note: item.note,
       referenceId: item.orderId,
       createdAt: asTime(item.createdAt) ?? new Date(),
@@ -430,6 +453,7 @@ async function writeGraph(tx: Writer, db: Database) {
 }
 
 export async function loadGraph(): Promise<Database | null> {
+  const dataRevision = await readDataRevision(prisma);
   const [users, chefs, drivers, meals, orders, transactions, messages, support, files, captures, settings, follows] = await Promise.all([
     prisma.user.findMany(),
     prisma.chefProfile.findMany(),
@@ -527,7 +551,7 @@ export async function loadGraph(): Promise<Database | null> {
       currency: "MAD",
       createdAt: user.createdAt.toISOString(),
     }));
-  return {
+  const db: Database = {
     profiles,
     chefs: chefRows,
     meals: meals.map((meal) => ({
@@ -562,6 +586,12 @@ export async function loadGraph(): Promise<Database | null> {
       commissionMad: order.commissionMad,
       deliveryFeeMad: order.deliveryFeeMad,
       driverCommissionMad: order.driverCommissionMad,
+      chefServiceFee: order.chefServiceFee,
+      driverCommission: order.driverCommission,
+      otpHash: order.otpHash,
+      otpExpiry: iso(order.otpExpiry),
+      otpAttempts: order.otpAttempts,
+      refuseReason: order.refuseReason,
       driverId: order.driverId,
       customerNotes: order.notes ?? "",
       customerEmail: order.customerEmail,
@@ -645,7 +675,7 @@ export async function loadGraph(): Promise<Database | null> {
       id: row.id,
       ownerId: row.userId,
       amountMad: row.amount,
-      note: row.note === "commission" ? "commission" : "adjustment",
+      note: row.note === "commission" ? "commission" : row.note === "penalty" ? "penalty" : "adjustment",
       orderId: row.referenceId,
       createdAt: row.createdAt.toISOString(),
     })),
@@ -656,13 +686,26 @@ export async function loadGraph(): Promise<Database | null> {
       createdAt: row.createdAt.toISOString(),
     })),
   };
+  graphRevisions.set(db, dataRevision);
+  return db;
 }
 
 export async function saveGraph(db: Database) {
+  // Fail closed: never fall back to a non-transactional full-graph rewrite after
+  // deleteMany. A failed transaction must not leave the database half-deleted.
+  // Also refuse stale graphs when atomic order/meal writers bumped app_data_revision.
+  const expectedRevision = graphRevisions.get(db);
   try {
-    await prisma.$transaction((tx) => writeGraph(tx, db), { timeout: 120_000, maxWait: 20_000 });
+    await prisma.$transaction(
+      async (tx) => {
+        await writeGraph(tx, db);
+        const next = await assertAndBumpDataRevision(tx, expectedRevision);
+        graphRevisions.set(db, next);
+      },
+      { timeout: 120_000, maxWait: 20_000 },
+    );
   } catch (error) {
-    if (!poolerTransactionError(error)) throw error;
-    await writeGraph(prisma as unknown as Writer, db);
+    if (error instanceof StoreError) throw error;
+    throw error;
   }
 }

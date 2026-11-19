@@ -1,12 +1,78 @@
 // Full end-to-end flow test against the local dev server.
 // Chef register -> admin approve -> publish meal with 6 images -> customer order
 // -> driver accept/pick_up/deliver (OTP) -> verify wallet commissions + Task 2 lookup.
-import { readFileSync } from "fs";
+//
+// FAIL-CLOSED: this script writes application data. It must never run against Neon
+// or any shared/production database. Localhost alone is NOT proof of isolation.
+import { existsSync, readFileSync } from "fs";
+import { resolve } from "path";
 
 const BASE = process.env.BASE_URL ?? "http://localhost:3000";
+const ADMIN_EMAIL = process.env.E2E_ADMIN_EMAIL;
+const ADMIN_PASSWORD = process.env.E2E_ADMIN_PASSWORD;
 const jars = {};
 const results = [];
 let failures = 0;
+
+function loadDotEnvKeys(filePath) {
+  if (!existsSync(filePath)) return {};
+  const out = {};
+  for (const line of readFileSync(filePath, "utf8").split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    const eq = trimmed.indexOf("=");
+    if (eq <= 0) continue;
+    const key = trimmed.slice(0, eq).trim();
+    let value = trimmed.slice(eq + 1).trim();
+    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+      value = value.slice(1, -1);
+    }
+    out[key] = value;
+  }
+  return out;
+}
+
+function databaseHostLooksShared(raw) {
+  if (!raw || !String(raw).trim()) return { shared: false, reason: "no-url" };
+  try {
+    const host = new URL(String(raw).replace(/^prisma\+/, "")).hostname.toLowerCase();
+    if (!host || host === "localhost" || host === "127.0.0.1") return { shared: false, reason: "local-host" };
+    if (host.endsWith(".neon.tech") || host.includes("-pooler")) return { shared: true, reason: "neon-or-pooler" };
+    if (host.endsWith(".supabase.co") || host.includes("amazonaws.com") || host.includes("azure.com")) {
+      return { shared: true, reason: "hosted-shared" };
+    }
+    return { shared: true, reason: "non-local-host" };
+  } catch {
+    return { shared: true, reason: "unreadable-url" };
+  }
+}
+
+function assertE2EDatabaseSafety() {
+  if (process.env.E2E_ALLOW_DB_WRITES !== "1") {
+    throw new Error(
+      "E2E refused: set E2E_ALLOW_DB_WRITES=1 only for a dedicated isolated test database. Localhost is not enough.",
+    );
+  }
+  if (process.env.E2E_DATABASE_MODE !== "isolated") {
+    throw new Error(
+      "E2E refused: set E2E_DATABASE_MODE=isolated to confirm the app points at a dedicated test database.",
+    );
+  }
+  if (!ADMIN_EMAIL || !ADMIN_PASSWORD) {
+    throw new Error("E2E refused: E2E_ADMIN_EMAIL and E2E_ADMIN_PASSWORD must be set explicitly (no hardcoded fallbacks).");
+  }
+  const fileEnv = {
+    ...loadDotEnvKeys(resolve(process.cwd(), ".env")),
+    ...loadDotEnvKeys(resolve(process.cwd(), ".env.local")),
+  };
+  const dbUrl = process.env.CUSTOM_DATABASE_URL || process.env.DATABASE_URL || fileEnv.CUSTOM_DATABASE_URL || fileEnv.DATABASE_URL;
+  const check = databaseHostLooksShared(dbUrl);
+  if (check.shared || check.reason === "no-url") {
+    throw new Error(
+      `E2E refused: database target is not a proven isolated local host (${check.reason}). Refusing writes to Neon/shared/production.`,
+    );
+  }
+}
 
 function report(name, ok, detail = "") {
   results.push({ name, ok, detail });
@@ -56,6 +122,8 @@ async function wallet(jar, label) {
 }
 
 async function main() {
+  assertE2EDatabaseSafety();
+
   const signaturePng = readFileSync("tmp-e2e/img6.png");
   const signatureDataUrl = `data:image/png;base64,${signaturePng.toString("base64")}`;
 
@@ -77,7 +145,7 @@ async function main() {
 
   // 2. Admin login + approve
   const adminLogin = await call("admin-login", "POST", "/api/auth/login", {
-    body: { email: "admin@wajbati.ma", password: "SahriAdmin2026!", desk: "admin" },
+    body: { email: ADMIN_EMAIL, password: ADMIN_PASSWORD, desk: "admin" },
     jar: "admin",
   });
   report("Admin login", adminLogin.status === 200, `HTTP ${adminLogin.status}`);
@@ -218,8 +286,8 @@ async function main() {
   const driverWalletAfter = await wallet("driver", "wallet-driver-after");
   const chefDelta = Math.round((chefWalletAfter.balance - chefWalletBefore.balance) * 100) / 100;
   const driverDelta = Math.round((driverWalletAfter.balance - driverWalletBefore.balance) * 100) / 100;
-  report("Commission deducted from CHEF wallet (3 MAD x 2 portions)", chefDelta === -6, `delta=${chefDelta} MAD (expected -6)`);
-  report("Commission deducted from DRIVER wallet (3 MAD x 2 portions)", driverDelta === -6, `delta=${driverDelta} MAD (expected -6)`);
+  report("Chef service fee deducted (7 MAD x 2 portions, price >= 40)", chefDelta === -14, `delta=${chefDelta} MAD (expected -14)`);
+  report("Driver commission deducted (1 MAD x 2 portions)", driverDelta === -2, `delta=${driverDelta} MAD (expected -2)`);
 
   // 10. Task 2 verification: customer registers, follows chef, email lookup
   const custReg = await call("customer-register", "POST", "/api/auth/customer/register", {

@@ -11,6 +11,8 @@ const statusTone: Record<OrderStatus, string> = {
   picked_up: "bg-gold/20 text-foreground",
   delivered: "bg-surface text-muted",
   cancelled: "bg-terracotta/10 text-terracotta-deep",
+  refused: "bg-terracotta/15 text-terracotta-deep",
+  not_reachable: "bg-terracotta/15 text-terracotta-deep",
 };
 
 export function StatusPill({ status }: { status: OrderStatus }) {

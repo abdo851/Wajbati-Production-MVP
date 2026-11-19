@@ -68,6 +68,11 @@ function Desk({ name, onLogout }: { name: string; onLogout: () => Promise<void> 
             {name}
             {data ? ` · ${formatServiceDate(data.serviceDate)}` : ""}
           </p>
+          {data ? (
+            <p className="mt-1 text-sm font-semibold text-gold-deep">
+              {t("admin.platformRevenue", { amount: formatMad(data.platformRevenueMad) })}
+            </p>
+          ) : null}
         </div>
         <div className="flex items-center gap-3">
           <LiveDot />
@@ -112,13 +117,7 @@ function Desk({ name, onLogout }: { name: string; onLogout: () => Promise<void> 
             driverMad={data.driverWalletCommissionMad}
             onSaved={() => void reload()}
           />
-          <p className="mt-3 text-sm text-muted">
-            {t("admin.booksNote", {
-              delivery: formatMad(data.deliveryFeeMad),
-              commission: formatMad(data.commissionPerMealMad),
-              driverFee: formatMad(data.driverCommissionPerTripMad),
-            })}
-          </p>
+          <p className="mt-3 text-sm text-muted">{t("admin.booksNote")}</p>
 
           <section className="mt-8">
             <h2 className="font-display text-2xl">{t("admin.kitchens")}</h2>

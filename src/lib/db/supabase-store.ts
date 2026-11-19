@@ -1,6 +1,6 @@
 import { randomUUID } from "crypto";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { DELIVERY_FEE_MAD, DRIVER_COMMISSION_MAD, PLATFORM_COMMISSION_MAD } from "@/lib/constants";
+import { assertDatabaseWriteAllowed } from "@/lib/db-guard";
 import { documentsAreReady, extensionFor, requiredDocumentKinds } from "@/lib/documents";
 import { financeOf, rowsOnDate, rowsThisWeek } from "@/lib/finance";
 import { StoreError } from "@/lib/errors";
@@ -150,11 +150,17 @@ async function withKitchen(
   return { ...row, chefs: data };
 }
 
+function optionalMoney(value: unknown): number {
+  if (value == null || value === "") return 0;
+  return num(value);
+}
+
 function toJob(row: Record<string, unknown>): DeliveryJob {
   const meal = one(row.meals as MealEmbed | MealEmbed[] | null);
   const chef = one(row.chefs as ChefEmbed | ChefEmbed[] | null);
-  const fee = row.delivery_fee_mad == null ? DELIVERY_FEE_MAD : num(row.delivery_fee_mad);
-  const commission = row.driver_commission_mad == null ? DRIVER_COMMISSION_MAD : num(row.driver_commission_mad);
+  // Missing DB fees stay 0 — never invent frozen legacy constants as live charges.
+  const fee = optionalMoney(row.delivery_fee_mad);
+  const commission = optionalMoney(row.driver_commission_mad);
   return {
     id: String(row.id),
     mealTitle: meal?.title ?? "Meal",
@@ -220,9 +226,9 @@ function moneyRow(row: Record<string, unknown>) {
     status: row.status as OrderStatus,
     quantity: num(row.quantity),
     totalMad: num(row.total_mad),
-    commissionMad: num(row.commission_mad),
-    deliveryFeeMad: num(row.delivery_fee_mad ?? DELIVERY_FEE_MAD),
-    driverCommissionMad: num(row.driver_commission_mad ?? DRIVER_COMMISSION_MAD),
+    commissionMad: optionalMoney(row.commission_mad),
+    deliveryFeeMad: optionalMoney(row.delivery_fee_mad),
+    driverCommissionMad: optionalMoney(row.driver_commission_mad),
     createdAt: String(row.created_at),
   };
 }
@@ -413,6 +419,7 @@ export async function authenticateSupabaseDriver(identifier: string, password: s
 }
 
 export async function registerSupabaseDriver(input: DriverApplication): Promise<void> {
+  assertDatabaseWriteAllowed("supabase");
   await signUpStaff({
     email: input.email,
     password: input.password,
@@ -427,6 +434,7 @@ export async function registerSupabaseDriver(input: DriverApplication): Promise<
 }
 
 export async function registerSupabaseChef(input: ChefApplication): Promise<{ user: AuthUser; accessToken: string }> {
+  assertDatabaseWriteAllowed("supabase");
   const session = await signUpStaff({
     email: input.email,
     password: input.password,
@@ -455,6 +463,7 @@ export async function registerSupabaseChef(input: ChefApplication): Promise<{ us
 }
 
 export async function registerSupabaseCustomer(input: CustomerAccountInput): Promise<{ user: AuthUser; accessToken: string }> {
+  assertDatabaseWriteAllowed("supabase");
   const email = input.email || `${input.phone}@customers.wajbati.local`;
   const session = await signUpStaff({
     email,
@@ -476,6 +485,7 @@ export async function authenticateSupabaseCustomer(identifier: string, password:
 }
 
 export async function updateSupabaseCustomer(accessToken: string, input: { fullName: string; phone: string }) {
+  assertDatabaseWriteAllowed("supabase");
   const supabase = client(accessToken);
   const { data, error } = await supabase.auth.getUser(accessToken);
   if (error || !data.user) return null;
@@ -493,6 +503,7 @@ export async function completeSupabaseStaff(
   role: "chef" | "driver",
   fields: { fullName: string; phone: string; city: string; vehicle: string; kitchenName: string },
 ) {
+  assertDatabaseWriteAllowed("supabase");
   const supabase = client(accessToken);
   const { error } = await supabase.rpc("complete_staff_signup", {
     p_role: role,
@@ -526,6 +537,7 @@ async function signUpStaff(input: { email: string; password: string; data: Recor
 export function createSupabaseRepository(accessToken?: string) {
   const authed = client(accessToken);
   const anon = client();
+  const guardWrite = () => assertDatabaseWriteAllowed("supabase");
 
   return {
     async listTodayMeals(): Promise<MealListResponse> {
@@ -544,6 +556,7 @@ export function createSupabaseRepository(accessToken?: string) {
     },
 
     async placeOrder(input: PlaceOrderInput): Promise<OrderReceipt> {
+      guardWrite();
       const { data, error } = await anon.rpc("place_order", {
         p_meal_id: input.mealId,
         p_customer_name: input.customerName,
@@ -563,9 +576,7 @@ export function createSupabaseRepository(accessToken?: string) {
         quantity: num(row.quantity),
         unitPriceMad: num(row.unitPriceMad ?? row.unit_price_mad),
         totalMad: num(row.totalMad ?? row.total_mad),
-        deliveryFeeMad: row.deliveryFeeMad == null && row.delivery_fee_mad == null
-          ? DELIVERY_FEE_MAD
-          : num(row.deliveryFeeMad ?? row.delivery_fee_mad),
+        deliveryFeeMad: optionalMoney(row.deliveryFeeMad ?? row.delivery_fee_mad),
         customerNotes: String(row.customerNotes ?? row.customer_notes ?? input.customerNotes),
         paymentMethod: row.paymentMethod === "wallet" || row.payment_method === "wallet" ? "wallet" : "cash",
         paymentStatus: paymentStatus(row.paymentStatus ?? row.payment_status),
@@ -612,6 +623,7 @@ export function createSupabaseRepository(accessToken?: string) {
     },
 
     async createMeal(chefId: string, input: CreateMealInput): Promise<ChefMeal> {
+      guardWrite();
       const approval = await loadChefById(authed, chefId);
       if (approval !== "approved") {
         throw new StoreError("Your account is under review. You cannot publish meals until approved.", 403);
@@ -635,6 +647,7 @@ export function createSupabaseRepository(accessToken?: string) {
     },
 
     async setMealPublished(chefId: string, mealId: string, isPublished: boolean): Promise<ChefMeal> {
+      guardWrite();
       const { data, error } = await authed
         .from("meals")
         .update({ is_published: isPublished })
@@ -648,6 +661,7 @@ export function createSupabaseRepository(accessToken?: string) {
     },
 
     async updateOrderStatus(chefId: string, orderId: string, status: OrderStatus): Promise<ChefOrder> {
+      guardWrite();
       const existing = await authed
         .from("orders")
         .select("id, status, customer_name, customer_phone, delivery_address, customer_notes, payment_method, payment_status, quantity, unit_price_mad, total_mad, commission_mad, created_at, meals(title)")
@@ -725,11 +739,13 @@ export function createSupabaseRepository(accessToken?: string) {
           driverName: driverNames.get(String(row.driver_id ?? "")) ?? "Driver",
         }));
       return {
-        commissionPerMealMad: PLATFORM_COMMISSION_MAD,
-        deliveryFeeMad: DELIVERY_FEE_MAD,
-        driverCommissionPerTripMad: DRIVER_COMMISSION_MAD,
-        chefWalletCommissionMad: 1,
-        driverWalletCommissionMad: 1,
+        // Frozen legacy constants must not appear as live approved rates.
+        commissionPerMealMad: 0,
+        deliveryFeeMad: 0,
+        driverCommissionPerTripMad: 0,
+        chefWalletCommissionMad: 0,
+        driverWalletCommissionMad: 0,
+        platformRevenueMad: 0,
         serviceDate,
         today: snapshot(todayRows),
         allTime: snapshot(rows),
@@ -790,6 +806,7 @@ export function createSupabaseRepository(accessToken?: string) {
     },
 
     async acceptDelivery(driverId: string, orderId: string): Promise<DeliveryJob> {
+      guardWrite();
       const { error } = await authed.rpc("accept_delivery", { p_order_id: orderId });
       if (error) fail(error, "Could not accept the delivery.");
       return loadJob(authed, orderId, driverId);
@@ -801,6 +818,7 @@ export function createSupabaseRepository(accessToken?: string) {
       action: "pick_up" | "deliver" | "release",
       code?: string,
     ): Promise<DeliveryJob> {
+      guardWrite();
       const { error } = await authed.rpc("advance_delivery", {
         p_order_id: orderId,
         p_action: action,
@@ -811,6 +829,7 @@ export function createSupabaseRepository(accessToken?: string) {
     },
 
     async setDriverStatus(driverId: string, status: "approved" | "rejected" | "postponed"): Promise<DriverRecord> {
+      guardWrite();
       const stored = status === "postponed" ? "pending" : status;
       if (status === "approved") {
         const existing = await authed.from("drivers").select("id, email, vehicle").eq("id", driverId).maybeSingle();
@@ -862,7 +881,7 @@ export function createSupabaseRepository(accessToken?: string) {
             deliveryAddress: String(row.delivery_address ?? ""),
             quantity: num(row.quantity),
             totalMad: num(row.total_mad),
-            deliveryFeeMad: num(row.delivery_fee_mad ?? DELIVERY_FEE_MAD),
+            deliveryFeeMad: optionalMoney(row.delivery_fee_mad),
             customerNotes: String(row.customer_notes ?? ""),
             status: row.status as CustomerOrder["status"],
             deliveryCode: String(row.delivery_code ?? ""),
@@ -877,6 +896,7 @@ export function createSupabaseRepository(accessToken?: string) {
       contentType: "image/jpeg" | "image/png" | "image/webp",
       bytes: Buffer,
     ): Promise<void> {
+      guardWrite();
       const driverQuery = await authed.from("drivers").select("id, profile_id, vehicle").eq("id", driverId).maybeSingle();
       if (driverQuery.error) fail(driverQuery.error, "Could not load the driver profile.");
       if (!driverQuery.data) throw new StoreError("That driver could not be found.", 404);
@@ -920,7 +940,7 @@ export function createSupabaseRepository(accessToken?: string) {
         deliveryAddress: String(row.deliveryAddress ?? row.delivery_address ?? ""),
         quantity: num(row.quantity),
         totalMad: num(row.totalMad ?? row.total_mad),
-        deliveryFeeMad: num(row.deliveryFeeMad ?? row.delivery_fee_mad ?? DELIVERY_FEE_MAD),
+        deliveryFeeMad: optionalMoney(row.deliveryFeeMad ?? row.delivery_fee_mad),
         customerNotes: String(row.customerNotes ?? row.customer_notes ?? ""),
         status: row.status as OrderStatus,
         deliveryCode: String(row.deliveryCode ?? row.delivery_code),
@@ -962,6 +982,7 @@ export function createSupabaseRepository(accessToken?: string) {
     },
 
     async setChefApproval(chefId: string, status: "approved" | "rejected" | "postponed"): Promise<Chef> {
+      guardWrite();
       const nextStatus = status === "postponed" ? "pending" : status;
       const updated = await authed.from("chefs").update({ approval_status: nextStatus }).eq("id", chefId).select("id, kitchen_name, city, approval_status, cin_storage_path, auto_entrepreneur_number, food_safety_accepted_at, profile_id").maybeSingle();
       if (updated.error) fail(updated.error, "Could not update the kitchen.");
@@ -1002,6 +1023,7 @@ export function createSupabaseRepository(accessToken?: string) {
       contentType: "image/jpeg" | "image/png" | "image/webp",
       bytes: Buffer,
     ): Promise<void> {
+      guardWrite();
       const chefQuery = await authed.from("chefs").select("id, profile_id").eq("id", chefId).maybeSingle();
       if (chefQuery.error) fail(chefQuery.error, "Could not load the kitchen.");
       if (!chefQuery.data) throw new StoreError("That kitchen could not be found.", 404);
@@ -1032,6 +1054,7 @@ export function createSupabaseRepository(accessToken?: string) {
       _contentType: "image/jpeg" | "image/png" | "image/webp",
       _bytes: Buffer,
     ): Promise<void> {
+      guardWrite();
       console.warn("[supabase] meal photo storage is not available yet.");
     },
 
@@ -1044,6 +1067,7 @@ export function createSupabaseRepository(accessToken?: string) {
     },
 
     async addEmailCapture(email: string, source: string): Promise<void> {
+      guardWrite();
       const inserted = await authed.from("email_captures").insert({ email, source, created_at: new Date().toISOString() });
       if (inserted.error) {
         console.warn("[supabase] email_captures table is not available yet.", inserted.error.message);
@@ -1060,11 +1084,13 @@ export function createSupabaseRepository(accessToken?: string) {
     },
 
     async saveChefSignature(chefId: string, signature: string): Promise<void> {
+      guardWrite();
       const updated = await authed.from("chefs").update({ signature_data_url: signature }).eq("id", chefId);
       if (updated.error) console.warn("[supabase] chefs.signature_data_url is not available yet.", updated.error.message);
     },
 
     async saveDriverSignature(driverId: string, signature: string): Promise<void> {
+      guardWrite();
       const updated = await authed.from("drivers").update({ signature_data_url: signature }).eq("id", driverId);
       if (updated.error) console.warn("[supabase] drivers.signature_data_url is not available yet.", updated.error.message);
     },
@@ -1081,10 +1107,12 @@ export function createSupabaseRepository(accessToken?: string) {
         licensePhotoDataUrl?: string | null;
       },
     ): Promise<void> {
+      guardWrite();
       console.warn("[supabase] optional profile columns are not available yet.");
     },
 
     async attachOrderEmail(orderId: string, email: string): Promise<void> {
+      guardWrite();
       const { error } = await anon.rpc("attach_order_email", { p_order_id: orderId, p_email: email });
       if (error) fail(error, "Could not save the email.");
     },
@@ -1155,6 +1183,10 @@ export function createSupabaseRepository(accessToken?: string) {
 
     async listFollowingMeals(): Promise<MealListResponse> {
       return { serviceDate: todayInCasablanca(), meals: [] };
+    },
+
+    async adminResolveOrder(): Promise<{ orderId: string; status: OrderStatus }> {
+      throw new StoreError("Order resolution is not available in Supabase mode yet.", 501);
     },
   };
 }

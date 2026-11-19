@@ -1,3 +1,4 @@
+import { createHash } from "crypto";
 import { PrismaClient } from "@prisma/client";
 
 const globalForPrisma = globalThis as unknown as {
@@ -40,6 +41,28 @@ function pooledDatabaseUrl(raw: string | undefined) {
   return query ? `${base}?${query}` : base;
 }
 
+/**
+ * Fingerprint the DB target without retaining credentials.
+ * Forces Prisma client recreation when CUSTOM_DATABASE_URL changes
+ * (Next.js env reload alone does not refresh the global singleton).
+ */
+function databaseTargetFingerprint(raw: string | undefined): string {
+  if (!raw) return "missing";
+  try {
+    const url = new URL(raw.replace(/^prisma\+/, ""));
+    const host = url.hostname.toLowerCase();
+    const ref =
+      (decodeURIComponent(url.username || "").match(/^postgres\.([a-z0-9]+)$/) || [])[1] ||
+      (host.match(/^db\.([a-z0-9]+)\.supabase\.co$/) || [])[1] ||
+      "";
+    const db = (url.pathname || "/").replace(/^\//, "") || "postgres";
+    const material = `${host}|${url.port || "5432"}|${db}|${ref}`;
+    return createHash("sha256").update(material).digest("hex").slice(0, 16);
+  } catch {
+    return "unparseable";
+  }
+}
+
 function createClient() {
   const url = pooledDatabaseUrl(process.env.CUSTOM_DATABASE_URL);
   return new PrismaClient({
@@ -51,10 +74,15 @@ function createClient() {
   });
 }
 
-if (!globalForPrisma.prisma || globalForPrisma.prismaPool !== POOL_REVISION) {
+function poolKey() {
+  return `${POOL_REVISION}:${databaseTargetFingerprint(process.env.CUSTOM_DATABASE_URL)}`;
+}
+
+const nextPool = poolKey();
+if (!globalForPrisma.prisma || globalForPrisma.prismaPool !== nextPool) {
   void globalForPrisma.prisma?.$disconnect();
   globalForPrisma.prisma = createClient();
-  globalForPrisma.prismaPool = POOL_REVISION;
+  globalForPrisma.prismaPool = nextPool;
 }
 
 export const prisma = globalForPrisma.prisma as PrismaClient;

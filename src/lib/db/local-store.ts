@@ -1,11 +1,27 @@
 import { readFile } from "fs/promises";
 import path from "path";
 import { loadGraph, saveGraph, authorizeAdminPasswordWrite } from "@/lib/db/prisma-io";
+import { prisma } from "@/lib/db/prisma";
 import { randomBytes, randomUUID, scryptSync, timingSafeEqual } from "crypto";
 import { codesMatch, newDeliveryCode, newTrackToken } from "@/lib/delivery-code";
 import { financeOf, rowsOnDate, rowsThisWeek } from "@/lib/finance";
-import { calculateDynamicCommission } from "@/lib/commission";
+import { calculateOrderFees } from "@/lib/commission";
 import { DELIVERY_FEE_MAD, DRIVER_COMMISSION_MAD, PLATFORM_COMMISSION_MAD } from "@/lib/constants";
+import { assertDatabaseWriteAllowed } from "@/lib/db-guard";
+import { bumpDataRevision } from "@/lib/db/data-revision";
+import {
+  atomicAcceptDelivery,
+  atomicAdvanceDelivery,
+  atomicAdminResolveOrder,
+  atomicCancelOrder,
+  atomicConfirmOrder,
+  atomicDeliverWithOtp,
+  atomicPlaceOrder,
+  recordOrderStatusEvent,
+} from "@/lib/db/order-writes";
+import { OWNER_FINANCIAL_RULES_APPROVED, cashMealTotalMad } from "@/lib/financial-rules";
+import { databaseLooksSharedOrProduction } from "@/lib/super-admin";
+import { formatClosureReason } from "@/lib/orders";
 import { documentsAreReady, extensionFor, requiredChefDocuments, requiredDocumentKinds } from "@/lib/documents";
 import { DEMO_ACCOUNTS } from "@/lib/demo-accounts";
 import { DRIVER_DEMOS } from "@/lib/driver-demos";
@@ -124,6 +140,12 @@ type Order = {
   commissionMad: number;
   deliveryFeeMad: number;
   driverCommissionMad: number;
+  chefServiceFee?: number | null;
+  driverCommission?: number | null;
+  otpHash?: string | null;
+  otpExpiry?: string | null;
+  otpAttempts?: number;
+  refuseReason?: string | null;
   driverId: string | null;
   customerNotes: string;
   customerEmail: string | null;
@@ -222,7 +244,7 @@ type WalletTxn = {
   id: string;
   ownerId: string;
   amountMad: number;
-  note: "commission" | "adjustment";
+  note: "commission" | "adjustment" | "penalty";
   orderId: string | null;
   createdAt: string;
 };
@@ -304,6 +326,35 @@ function seedDrivers(): Driver[] {
     status: demo.status,
     createdAt: new Date(Date.now() - 1000 * 60 * 40).toISOString(),
   }));
+}
+
+/** Empty in-memory graph for an uninitialized Prisma DB — never includes demo credentials. */
+function emptyDatabase(): Database {
+  return {
+    profiles: [],
+    chefs: [],
+    meals: [],
+    orders: [],
+    drivers: [],
+    documents: [],
+    chefDocuments: [],
+    wallets: [],
+    email_captures: [],
+    messages: [],
+    direct_messages: [],
+    settings: { chefCommissionMad: 1, driverCommissionMad: 1 },
+    wallet_transactions: [],
+    follows: [],
+  };
+}
+
+/**
+ * Demo/local seed is opt-in only.
+ * Requires RIGH_ALLOW_DEMO_SEED=1 and a non-shared database target (localhost).
+ * Never auto-seed into Supabase/Neon/production-like hosts.
+ */
+function demoSeedAllowed(): boolean {
+  return process.env.RIGH_ALLOW_DEMO_SEED === "1" && !databaseLooksSharedOrProduction();
 }
 
 function seed(): Database {
@@ -460,7 +511,8 @@ function seed(): Database {
 function normalize(db: Database): boolean {
   let changed = false;
   if (!Array.isArray(db.drivers)) {
-    db.drivers = seedDrivers();
+    // Never inject demo drivers during normalize — that could persist into a live DB.
+    db.drivers = [];
     changed = true;
   }
   if (!Array.isArray(db.wallets)) {
@@ -571,10 +623,8 @@ function normalize(db: Database): boolean {
         profile.role = "admin";
         changed = true;
       }
-      if (!verifyPassword(master.password, profile.passwordHash)) {
-        profile.passwordHash = hashPassword(master.password);
-        changed = true;
-      }
+      // Never overwrite an existing admin password hash during normalize/reads.
+      // Explicit admin password changes go through authorizeAdminPasswordWrite() only.
     }
   }
   for (const profile of db.profiles) {
@@ -651,11 +701,13 @@ function normalize(db: Database): boolean {
       changed = true;
     }
     if (order.deliveryFeeMad === undefined) {
-      order.deliveryFeeMad = DELIVERY_FEE_MAD;
+      // Do not backfill the frozen/unapproved DELIVERY_FEE_MAD constant.
+      order.deliveryFeeMad = 0;
       changed = true;
     }
     if (order.driverCommissionMad === undefined) {
-      order.driverCommissionMad = DRIVER_COMMISSION_MAD;
+      // Do not backfill frozen/unapproved commission constants.
+      order.driverCommissionMad = 0;
       changed = true;
     }
     if (order.customerNotes === undefined) {
@@ -693,6 +745,21 @@ function rememberDb(db: Database) {
   readCache = { at: Date.now(), db: structuredClone(db) };
 }
 
+async function safeStatusEvent(input: {
+  orderId: string;
+  fromStatus: string;
+  toStatus: string;
+  actorRole: string;
+  actorId: string | null;
+  reason: string | null;
+}) {
+  try {
+    await recordOrderStatusEvent(input);
+  } catch (error) {
+    console.warn("[order-event]", error instanceof Error ? error.message : "unknown");
+  }
+}
+
 async function loadGraphWithRetry() {
   let lastError: unknown;
   for (let attempt = 0; attempt <= 3; attempt += 1) {
@@ -723,6 +790,12 @@ async function readDb(fresh = false): Promise<{ db: Database; created: boolean; 
     if (!migrated) rememberDb(existing);
     return { db: existing, created: false, migrated };
   }
+  // Empty Prisma DB: do not silently seed demo accounts into the live database.
+  if (!demoSeedAllowed()) {
+    const empty = emptyDatabase();
+    rememberDb(empty);
+    return { db: empty, created: false, migrated: false };
+  }
   try {
     const raw = await readFile(filePath, "utf8");
     const db = JSON.parse(raw) as Database;
@@ -736,14 +809,55 @@ async function readDb(fresh = false): Promise<{ db: Database; created: boolean; 
 }
 
 async function writeDb(db: Database) {
-  await saveGraph(db);
-  rememberDb(db);
+  assertDatabaseWriteAllowed("prisma");
+  try {
+    await saveGraph(db);
+    rememberDb(db);
+  } catch (error) {
+    // Stale-graph rejection or failed rewrite: drop process cache so the next read reloads DB.
+    readCache = null;
+    throw error;
+  }
+}
+
+/**
+ * Cross-instance mutex backed by a real table row — safe under PgBouncer/Neon pooler
+ * (unlike session advisory locks, which can leak across pooled connections).
+ * Guarded with the same shared-DB policy as saveGraph (raw SQL must not bypass it).
+ */
+async function acquireDbMutex(name: string, timeoutMs = 10_000): Promise<void> {
+  assertDatabaseWriteAllowed("prisma");
+  await prisma.$executeRaw`CREATE TABLE IF NOT EXISTS app_mutex (name text primary key, granted_at timestamptz)`;
+  const start = Date.now();
+  for (;;) {
+    const created = await prisma.$executeRaw`INSERT INTO app_mutex (name, granted_at) VALUES (${name}, now()) ON CONFLICT (name) DO NOTHING`;
+    if (Number(created) > 0) return;
+    if (Date.now() - start > timeoutMs) throw new StoreError("تعذر تنفيذ العملية، حاول مجدداً.", 409);
+    await new Promise((resolve) => setTimeout(resolve, 150));
+  }
+}
+
+async function releaseDbMutex(name: string) {
+  assertDatabaseWriteAllowed("prisma");
+  await prisma.$executeRaw`DELETE FROM app_mutex WHERE name = ${name}`.catch(() => undefined);
+}
+
+/** Cross-instance critical-section guard for check+mutate operations on serverless. */
+async function withAdvisoryLock<T>(key: string, run: () => Promise<T>): Promise<T> {
+  await acquireDbMutex(key);
+  try {
+    return await run();
+  } finally {
+    await releaseDbMutex(key);
+  }
 }
 
 async function withDb<T>(fn: (db: Database) => T | Promise<T>, persist: boolean): Promise<T> {
   return locked(async () => {
     const loaded = await readDb(persist);
-    if (loaded.created || loaded.migrated) await writeDb(loaded.db);
+    // Only persist a brand-new seed graph immediately. Do not rewrite Neon/Postgres
+    // solely because normalize() marked field backfills on a read-only path.
+    if (loaded.created) await writeDb(loaded.db);
     const result = await fn(loaded.db);
     if (persist) await writeDb(loaded.db);
     return result;
@@ -897,18 +1011,51 @@ function alreadyCharged(db: Database, ownerId: string, orderId: string) {
   return db.wallet_transactions.some((item) => item.ownerId === ownerId && item.orderId === orderId && item.note === "commission");
 }
 
-function chargeDeliveryCommissions(db: Database, order: Order) {
+/**
+ * Financial settlement only — never a prerequisite for recording physical delivery.
+ * When owner rules are unapproved, delivery stays `delivered` and wallets are untouched.
+ * Idempotent via alreadyCharged; does not create zero-value settlement rows.
+ */
+function trySettleDeliveryCommissions(db: Database, order: Order) {
   if (order.status !== "delivered") return;
-  const fees = calculateDynamicCommission(order.unitPriceMad, order.quantity);
+  if (!OWNER_FINANCIAL_RULES_APPROVED) return;
+  const fees = calculateOrderFees(order.unitPriceMad, order.quantity);
+  if (fees.chefServiceFee <= 0 && fees.driverCommission <= 0) return;
   order.commissionPerMealMad = fees.chefPerPortionMad;
-  order.commissionMad = fees.chefCommissionMad;
-  order.driverCommissionMad = fees.driverCommissionMad;
+  order.commissionMad = fees.chefServiceFee;
+  order.driverCommissionMad = fees.driverCommission;
+  order.chefServiceFee = fees.chefServiceFee;
+  order.driverCommission = fees.driverCommission;
   const chef = db.chefs.find((item) => item.id === order.chefId);
-  if (chef && fees.chefCommissionMad > 0 && !alreadyCharged(db, chef.profileId, order.id)) {
-    moveWallet(db, chef.profileId, -fees.chefCommissionMad, "commission", order.id);
+  if (chef && fees.chefServiceFee > 0 && !alreadyCharged(db, chef.profileId, order.id)) {
+    moveWallet(db, chef.profileId, -fees.chefServiceFee, "commission", order.id);
   }
-  if (order.driverId && fees.driverCommissionMad > 0 && !alreadyCharged(db, order.driverId, order.id)) {
-    moveWallet(db, order.driverId, -fees.driverCommissionMad, "commission", order.id);
+  if (order.driverId && fees.driverCommission > 0 && !alreadyCharged(db, order.driverId, order.id)) {
+    moveWallet(db, order.driverId, -fees.driverCommission, "commission", order.id);
+  }
+}
+
+/** No automatic refusal penalty is owner-approved — do not invent wallet rows. */
+function logRefusalPenalty(_db: Database, _order: Order) {
+  return;
+}
+
+function assertDeliveryCode(order: Order, given: string) {
+  if (order.otpHash) {
+    if (order.otpExpiry && new Date(order.otpExpiry).getTime() < Date.now()) {
+      throw new StoreError("انتهت صلاحية رمز التسليم.", 409);
+    }
+    if ((order.otpAttempts ?? 0) >= 3) {
+      throw new StoreError("تم تجاوز عدد محاولات الرمز.", 409);
+    }
+    order.otpAttempts = (order.otpAttempts ?? 0) + 1;
+    if (!verifyPassword(given, order.otpHash)) {
+      throw new StoreError("That code does not match.", 409);
+    }
+    return;
+  }
+  if (!codesMatch(order.deliveryCode, given)) {
+    throw new StoreError("That code does not match.", 409);
   }
 }
 
@@ -916,6 +1063,51 @@ function assertWalletOpen(db: Database, ownerId: string) {
   if (balanceOf(db, ownerId) <= 0) {
     throw new StoreError("Your wallet balance is empty. Top it up before publishing or accepting orders.", 403);
   }
+}
+
+async function assertPrismaWalletOpen(ownerId: string) {
+  const user = await prisma.user.findUnique({
+    where: { id: ownerId },
+    select: { walletBalance: true },
+  });
+  if (!user || user.walletBalance <= 0) {
+    throw new StoreError("Your wallet balance is empty. Top it up before publishing or accepting orders.", 403);
+  }
+}
+
+function chefMealFromRow(
+  meal: {
+    id: string;
+    chefId: string;
+    title: string;
+    description: string;
+    price: number;
+    quantity: number;
+    remainingQuantity: number;
+    serviceDate: Date;
+    isPublished: boolean;
+    imageUrl: string | null;
+    images: string[];
+  },
+  kitchenName: string,
+  city: string,
+): ChefMeal {
+  const paths = meal.images?.length ? meal.images : meal.imageUrl ? [meal.imageUrl] : [];
+  return {
+    id: meal.id,
+    chefId: meal.chefId,
+    title: meal.title,
+    description: meal.description,
+    priceMad: meal.price,
+    maxQuantity: meal.quantity,
+    remainingQuantity: meal.remainingQuantity,
+    serviceDate: meal.serviceDate.toISOString().slice(0, 10),
+    kitchenName,
+    city,
+    photoUrl: paths.length > 0 ? `/api/meals/${meal.id}/photo?i=0` : null,
+    photoUrls: paths.map((_, index) => `/api/meals/${meal.id}/photo?i=${index}`),
+    isPublished: meal.isPublished,
+  };
 }
 
 function moveWallet(db: Database, ownerId: string, amountMad: number, note: WalletTxn["note"], orderId: string | null) {
@@ -1154,24 +1346,71 @@ function requireDriver(db: Database, driverId: string): Driver {
 
 const DUMMY_HASH = `${"ab".repeat(16)}:${"cd".repeat(32)}`;
 
+function profileRoleFromEnum(role: string): "customer" | "chef" | "admin" {
+  if (role === "CHEF") return "chef";
+  if (role === "ADMIN") return "admin";
+  return "customer";
+}
+
+function approvalFromEnum(status: string): "pending" | "approved" | "rejected" {
+  if (status === "APPROVED") return "approved";
+  if (status === "REJECTED") return "rejected";
+  return "pending";
+}
+
+/**
+ * Authenticate against Prisma User rows directly.
+ * Avoids full-graph loadCache / stale-DB singleton issues for login.
+ */
 export async function authenticateLocal(email: string, password: string): Promise<AuthUser | null> {
-  return withDb((db) => {
-    const profile = db.profiles.find((item) => item.email.toLowerCase() === email.toLowerCase());
-    const ok = verifyPassword(password, profile?.passwordHash ?? DUMMY_HASH);
-    if (!profile) throw new LoginFailure("user not found");
-    if (!ok) throw new LoginFailure("password mismatch");
-    if (profile.role === "chef") {
-      const kitchen = db.chefs.find((item) => item.profileId === profile.id && item.isActive) ?? db.chefs.find((item) => item.profileId === profile.id);
-      if (kitchen?.approvalStatus === "approved") return mapUser(db, profile);
-      if (kitchen?.approvalStatus === "pending" || kitchen?.approvalStatus === "rejected") {
-        throw new StoreError("Your account is under review. You cannot publish meals until approved.", 403);
-      }
+  const user = await prisma.user.findFirst({
+    where: {
+      email: { equals: email.trim().toLowerCase(), mode: "insensitive" },
+      isDeleted: false,
+      role: { not: "DRIVER" },
+    },
+    include: { chefProfile: true },
+  });
+  const ok = verifyPassword(password, user?.password ?? DUMMY_HASH);
+  if (!user || !user.isActive) throw new LoginFailure("user not found");
+  if (!ok) throw new LoginFailure("password mismatch");
+
+  const role = profileRoleFromEnum(user.role);
+  if (role === "chef") {
+    const kitchen = user.chefProfile;
+    const approval = approvalFromEnum(user.approvalStatus);
+    if (approval === "pending" || approval === "rejected") {
+      throw new StoreError("Your account is under review. You cannot publish meals until approved.", 403);
     }
-    if (profile.emailConfirmed === false && profile.role !== "chef") {
-      throw new StoreError("Please confirm your email first.", 403);
+    if (!kitchen || !kitchen.isActive || approval !== "approved") {
+      throw new LoginFailure("user not found");
     }
-    return mapUser(db, profile);
-  }, false);
+  }
+  if (user.emailConfirmed === false && role !== "chef") {
+    throw new StoreError("Please confirm your email first.", 403);
+  }
+
+  const kitchen = user.chefProfile;
+  return {
+    id: user.id,
+    email: user.email,
+    fullName: user.fullName,
+    role,
+    chefId: kitchen?.id ?? null,
+    kitchenName: kitchen?.kitchenName ?? null,
+    driverId: null,
+    driverStatus: null,
+    city: kitchen?.city ?? null,
+    phone: user.phone,
+    vehicle: null,
+    documentsReady: null,
+    chefApprovalStatus: kitchen ? approvalFromEnum(user.approvalStatus) : null,
+    approvalStatus: kitchen ? approvalFromEnum(user.approvalStatus) : null,
+    emailConfirmed: user.emailConfirmed,
+    avatarDataUrl: user.avatarDataUrl,
+    bio: kitchen?.bio ?? "",
+    gallery: kitchen?.gallery ?? [],
+  };
 }
 
 export async function findLocalUser(userId: string): Promise<AuthUser | null> {
@@ -1343,39 +1582,66 @@ export async function authenticateLocalCustomer(identifier: string, password: st
 }
 
 export async function updateLocalCustomer(userId: string, input: { fullName: string; phone: string }): Promise<AuthUser> {
-  return withDb((db) => {
-    const profile = db.profiles.find((item) => item.id === userId && item.role === "customer");
-    if (!profile) throw new StoreError("Sign in to continue.", 401);
-    if (db.profiles.some((item) => item.id !== userId && item.phone === input.phone)) {
-      throw new StoreError("That phone is already registered.", 409);
-    }
-    if (db.drivers.some((item) => item.phone === input.phone)) {
-      throw new StoreError("That phone is already registered.", 409);
-    }
-    profile.fullName = input.fullName;
-    profile.phone = input.phone;
-    return mapUser(db, profile);
-  }, true);
+  assertDatabaseWriteAllowed("prisma");
+  const existing = await prisma.user.findFirst({
+    where: { id: userId, role: "CUSTOMER", isDeleted: false },
+    select: { id: true, email: true, fullName: true, phone: true, emailConfirmed: true, avatarDataUrl: true },
+  });
+  if (!existing) throw new StoreError("Sign in to continue.", 401);
+  const phoneTaken = await prisma.user.findFirst({
+    where: { phone: input.phone, NOT: { id: userId } },
+    select: { id: true },
+  });
+  if (phoneTaken) throw new StoreError("That phone is already registered.", 409);
+  const updated = await prisma.user.update({
+    where: { id: userId },
+    data: { fullName: input.fullName, phone: input.phone },
+  });
+  await bumpDataRevision(prisma);
+  readCache = null;
+  return {
+    id: updated.id,
+    email: updated.email,
+    fullName: updated.fullName,
+    role: "customer",
+    chefId: null,
+    kitchenName: null,
+    driverId: null,
+    driverStatus: null,
+    city: null,
+    phone: updated.phone,
+    vehicle: null,
+    documentsReady: null,
+    chefApprovalStatus: null,
+    approvalStatus: null,
+    emailConfirmed: updated.emailConfirmed,
+    avatarDataUrl: updated.avatarDataUrl,
+    bio: "",
+    gallery: [],
+  };
 }
 
 export async function confirmLocalEmail(token: string): Promise<boolean> {
-  return withDb((db) => {
-    const now = Date.now();
-    const profile = db.profiles.find((item) => item.confirmationToken === token);
-    if (profile) {
-      if (!profile.confirmationExpiresAt || Date.parse(profile.confirmationExpiresAt) < now) return false;
-      profile.emailConfirmed = true;
-      profile.confirmationToken = null;
-      profile.confirmationExpiresAt = null;
-      return true;
-    }
-    const driver = db.drivers.find((item) => item.confirmationToken === token);
-    if (!driver || !driver.confirmationExpiresAt || Date.parse(driver.confirmationExpiresAt) < now) return false;
-    driver.emailConfirmed = true;
-    driver.confirmationToken = null;
-    driver.confirmationExpiresAt = null;
-    return true;
-  }, true);
+  assertDatabaseWriteAllowed("prisma");
+  const now = new Date();
+  const user = await prisma.user.findFirst({
+    where: { confirmationToken: token },
+    select: { id: true, confirmationExpiresAt: true },
+  });
+  if (!user || !user.confirmationExpiresAt || user.confirmationExpiresAt.getTime() < now.getTime()) {
+    return false;
+  }
+  await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      emailConfirmed: true,
+      confirmationToken: null,
+      confirmationExpiresAt: null,
+    },
+  });
+  await bumpDataRevision(prisma);
+  readCache = null;
+  return true;
 }
 
 export async function findLocalGoogle(identity: GoogleIdentity): Promise<AuthUser | null> {
@@ -1439,66 +1705,112 @@ export const localRepository = {
   },
 
   async placeOrder(input: PlaceOrderInput): Promise<OrderReceipt> {
-    return withDb((db) => {
-      const today = todayInCasablanca();
-      const meal = db.meals.find((item) => item.id === input.mealId);
-      const chef = meal ? chefFor(db, meal.chefId) : undefined;
-      if (!meal || !chef || !meal.isPublished || !mealIsVisible(meal) || meal.serviceDate !== today) {
-        throw new StoreError("This meal is not on today's board.", 404);
-      }
-      if (meal.remainingQuantity < input.quantity) {
-        throw new StoreError("Not enough portions left.", 409);
-      }
-      meal.remainingQuantity -= input.quantity;
-      const fees = calculateDynamicCommission(meal.priceMad, input.quantity);
-      const createdAt = new Date().toISOString();
-      const order: Order = {
-        id: randomUUID(),
-        mealId: meal.id,
-        chefId: meal.chefId,
-        customerName: input.customerName,
-        customerPhone: input.customerPhone,
-        deliveryAddress: input.deliveryAddress,
-        deliveryLat: input.deliveryLat ?? null,
-        deliveryLng: input.deliveryLng ?? null,
-        quantity: input.quantity,
-        unitPriceMad: meal.priceMad,
-        commissionPerMealMad: fees.chefPerPortionMad,
-        totalMad: roundMoney(meal.priceMad * input.quantity),
-        commissionMad: fees.chefCommissionMad,
-        deliveryFeeMad: DELIVERY_FEE_MAD,
-        driverCommissionMad: fees.driverCommissionMad,
-        driverId: null,
-        customerNotes: input.customerNotes,
-        customerEmail: null,
-        paymentMethod: "cash",
-        paymentStatus: "due_on_delivery",
-        deliveryCode: newDeliveryCode(),
-        trackToken: newTrackToken(),
-        status: "pending",
-        rating: null,
-        review: null,
-        createdAt,
-      };
-      db.orders.push(order);
-      return {
-        id: order.id,
-        mealTitle: meal.title,
-        kitchenName: chef.kitchenName,
-        customerName: order.customerName,
-        deliveryAddress: order.deliveryAddress,
-        quantity: order.quantity,
-        unitPriceMad: order.unitPriceMad,
-        totalMad: order.totalMad,
-        deliveryFeeMad: order.deliveryFeeMad,
-        customerNotes: order.customerNotes,
-        paymentMethod: order.paymentMethod,
-        paymentStatus: order.paymentStatus,
-        deliveryCode: order.deliveryCode,
-        trackToken: order.trackToken,
-        createdAt,
-      };
-    }, true);
+    return withAdvisoryLock("place_order", () =>
+      locked(async () => {
+        const loaded = await readDb(true);
+        const db = loaded.db;
+        const today = todayInCasablanca();
+        const meal = db.meals.find((item) => item.id === input.mealId);
+        const chef = meal ? chefFor(db, meal.chefId) : undefined;
+        if (!meal || !chef || !meal.isPublished || !mealIsVisible(meal) || meal.serviceDate !== today) {
+          throw new StoreError("This meal is not on today's board.", 404);
+        }
+        if (meal.remainingQuantity < input.quantity) {
+          throw new StoreError("Not enough portions left.", 409);
+        }
+        // COD: customer pays meal cash only. Delivery fee + wallet commissions are frozen.
+        const totalMad = cashMealTotalMad(meal.priceMad, input.quantity);
+        const code = newDeliveryCode();
+        const createdAt = new Date().toISOString();
+        const orderId = randomUUID();
+        const otpHash = hashPassword(code);
+        const otpExpiry = new Date(Date.now() + 10 * 60 * 1000);
+        const trackToken = newTrackToken();
+
+        await atomicPlaceOrder({
+          id: orderId,
+          mealId: meal.id,
+          chefId: meal.chefId,
+          quantity: input.quantity,
+          customerName: input.customerName,
+          customerPhone: input.customerPhone,
+          deliveryAddress: input.deliveryAddress,
+          deliveryLat: input.deliveryLat ?? null,
+          deliveryLng: input.deliveryLng ?? null,
+          customerNotes: input.customerNotes,
+          unitPriceMad: meal.priceMad,
+          totalMad,
+          otpHash,
+          otpExpiry,
+          deliveryCode: code,
+          trackToken,
+          createdAt: new Date(createdAt),
+        });
+
+        meal.remainingQuantity -= input.quantity;
+        const order: Order = {
+          id: orderId,
+          mealId: meal.id,
+          chefId: meal.chefId,
+          customerName: input.customerName,
+          customerPhone: input.customerPhone,
+          deliveryAddress: input.deliveryAddress,
+          deliveryLat: input.deliveryLat ?? null,
+          deliveryLng: input.deliveryLng ?? null,
+          quantity: input.quantity,
+          unitPriceMad: meal.priceMad,
+          commissionPerMealMad: 0,
+          totalMad,
+          commissionMad: 0,
+          deliveryFeeMad: 0,
+          driverCommissionMad: 0,
+          chefServiceFee: 0,
+          driverCommission: 0,
+          otpHash,
+          otpExpiry: otpExpiry.toISOString(),
+          otpAttempts: 0,
+          refuseReason: null,
+          driverId: null,
+          customerNotes: input.customerNotes,
+          customerEmail: null,
+          paymentMethod: "cash",
+          paymentStatus: "due_on_delivery",
+          deliveryCode: "",
+          trackToken,
+          status: "pending",
+          rating: null,
+          review: null,
+          createdAt,
+        };
+        db.orders.push(order);
+        rememberDb(db);
+        await safeStatusEvent({
+          orderId,
+          fromStatus: "none",
+          toStatus: "pending",
+          actorRole: "customer",
+          actorId: null,
+          reason: null,
+        });
+        return {
+          id: order.id,
+          mealTitle: meal.title,
+          kitchenName: chef.kitchenName,
+          customerName: order.customerName,
+          deliveryAddress: order.deliveryAddress,
+          quantity: order.quantity,
+          unitPriceMad: order.unitPriceMad,
+          totalMad: order.totalMad,
+          deliveryFeeMad: order.deliveryFeeMad,
+          customerNotes: order.customerNotes,
+          paymentMethod: order.paymentMethod,
+          paymentStatus: order.paymentStatus,
+          deliveryCode: code,
+          trackToken: order.trackToken,
+          createdAt,
+        };
+      }),
+    );
   },
 
   async chefBoard(chefId: string): Promise<ChefBoard> {
@@ -1527,58 +1839,90 @@ export const localRepository = {
   },
 
   async createMeal(chefId: string, input: CreateMealInput): Promise<ChefMeal> {
-    return withDb((db) => {
-      const chef = chefFor(db, chefId);
-      if (!chef) throw new StoreError("This kitchen is not active.", 403);
-      if (chef.approvalStatus !== "approved") {
-        throw new StoreError("Your account is under review. You cannot publish meals until approved.", 403);
-      }
-      assertWalletOpen(db, chef.profileId);
-      const meal: Meal = {
+    assertDatabaseWriteAllowed("prisma");
+    const chef = await prisma.chefProfile.findFirst({
+      where: { id: chefId, isActive: true },
+      select: {
+        id: true,
+        userId: true,
+        kitchenName: true,
+        city: true,
+        user: { select: { approvalStatus: true, isDeleted: true } },
+      },
+    });
+    if (!chef || chef.user.isDeleted) throw new StoreError("This kitchen is not active.", 403);
+    if (chef.user.approvalStatus !== "APPROVED") {
+      throw new StoreError("Your account is under review. You cannot publish meals until approved.", 403);
+    }
+    await assertPrismaWalletOpen(chef.userId);
+    const serviceDate = todayInCasablanca();
+    const created = await prisma.meal.create({
+      data: {
         id: randomUUID(),
         chefId,
         title: input.title,
         description: input.description,
-        priceMad: input.priceMad,
-        maxQuantity: input.maxQuantity,
+        price: input.priceMad,
+        quantity: input.maxQuantity,
         remainingQuantity: input.maxQuantity,
-        serviceDate: todayInCasablanca(),
+        serviceDate: new Date(`${serviceDate}T00:00:00.000Z`),
         isPublished: true,
-        createdAt: new Date().toISOString(),
-        photoPath: null,
-        photoPaths: [],
+        imageUrl: null,
+        images: [],
         isDeleted: false,
         isActive: true,
-      };
-      db.meals.push(meal);
-      return toChefMeal(db, meal);
-    }, true);
+      },
+    });
+    await bumpDataRevision(prisma);
+    readCache = null;
+    return chefMealFromRow(created, chef.kitchenName, chef.city ?? "");
   },
 
   async updateMeal(chefId: string, mealId: string, input: CreateMealInput): Promise<ChefMeal> {
-    return withDb((db) => {
-      const meal = db.meals.find((item) => item.id === mealId && item.chefId === chefId);
-      if (!meal) throw new StoreError("That meal could not be found.", 404);
-      const delta = input.maxQuantity - meal.maxQuantity;
-      meal.title = input.title;
-      meal.description = input.description;
-      meal.priceMad = input.priceMad;
-      meal.maxQuantity = input.maxQuantity;
-      meal.remainingQuantity = Math.max(0, Math.min(input.maxQuantity, meal.remainingQuantity + delta));
-      return toChefMeal(db, meal);
-    }, true);
+    assertDatabaseWriteAllowed("prisma");
+    const meal = await prisma.meal.findFirst({
+      where: { id: mealId, chefId, isDeleted: false },
+    });
+    if (!meal) throw new StoreError("That meal could not be found.", 404);
+    const chef = await prisma.chefProfile.findFirst({
+      where: { id: chefId },
+      select: { kitchenName: true, city: true },
+    });
+    const delta = input.maxQuantity - meal.quantity;
+    const remainingQuantity = Math.max(0, Math.min(input.maxQuantity, meal.remainingQuantity + delta));
+    const updated = await prisma.meal.update({
+      where: { id: mealId },
+      data: {
+        title: input.title,
+        description: input.description,
+        price: input.priceMad,
+        quantity: input.maxQuantity,
+        remainingQuantity,
+      },
+    });
+    await bumpDataRevision(prisma);
+    readCache = null;
+    return chefMealFromRow(updated, chef?.kitchenName ?? "Kitchen", chef?.city ?? "");
   },
 
   async deleteMeal(chefId: string, mealId: string): Promise<void> {
-    return withDb((db) => {
-      const meal = db.meals.find((item) => item.id === mealId && item.chefId === chefId);
-      if (!meal) throw new StoreError("That meal could not be found.", 404);
-      if (db.orders.some((order) => order.mealId === mealId)) {
-        meal.isPublished = false;
-      }
-      meal.isDeleted = true;
-      meal.isActive = false;
-    }, true);
+    assertDatabaseWriteAllowed("prisma");
+    const meal = await prisma.meal.findFirst({
+      where: { id: mealId, chefId },
+      select: { id: true },
+    });
+    if (!meal) throw new StoreError("That meal could not be found.", 404);
+    const orderCount = await prisma.order.count({ where: { mealId } });
+    await prisma.meal.update({
+      where: { id: mealId },
+      data: {
+        isDeleted: true,
+        isActive: false,
+        ...(orderCount > 0 ? { isPublished: false } : {}),
+      },
+    });
+    await bumpDataRevision(prisma);
+    readCache = null;
   },
 
   async withdrawChef(profileId: string): Promise<void> {
@@ -1621,35 +1965,88 @@ export const localRepository = {
   },
 
   async setMealPublished(chefId: string, mealId: string, isPublished: boolean): Promise<ChefMeal> {
-    return withDb((db) => {
-      const meal = db.meals.find((item) => item.id === mealId && item.chefId === chefId);
-      if (!meal) throw new StoreError("That meal could not be found.", 404);
-      if (isPublished) {
-        const chef = chefFor(db, chefId);
-        if (!chef) throw new StoreError("This kitchen is not active.", 403);
-        assertWalletOpen(db, chef.profileId);
-      }
-      meal.isPublished = isPublished;
-      return toChefMeal(db, meal);
-    }, true);
+    assertDatabaseWriteAllowed("prisma");
+    const meal = await prisma.meal.findFirst({
+      where: { id: mealId, chefId, isDeleted: false },
+    });
+    if (!meal) throw new StoreError("That meal could not be found.", 404);
+    const chef = await prisma.chefProfile.findFirst({
+      where: { id: chefId, isActive: true },
+      select: { userId: true, kitchenName: true, city: true },
+    });
+    if (isPublished) {
+      if (!chef) throw new StoreError("This kitchen is not active.", 403);
+      await assertPrismaWalletOpen(chef.userId);
+    }
+    const updated = await prisma.meal.update({
+      where: { id: mealId },
+      data: { isPublished },
+    });
+    await bumpDataRevision(prisma);
+    readCache = null;
+    return chefMealFromRow(updated, chef?.kitchenName ?? "Kitchen", chef?.city ?? "");
   },
 
   async updateOrderStatus(chefId: string, orderId: string, status: OrderStatus): Promise<ChefOrder> {
-    return withDb((db) => {
+    return locked(async () => {
+      const loaded = await readDb(true);
+      const db = loaded.db;
       const order = db.orders.find((item) => item.id === orderId && item.chefId === chefId);
       if (!order) throw new StoreError("That order could not be found.", 404);
       assertTransition(order.status, status);
       const previous = order.status;
-      order.status = status;
-      if (status === "delivered" && previous !== "delivered") chargeDeliveryCommissions(db, order);
+
       if (status === "cancelled" && previous !== "cancelled") {
+        const restored = await atomicCancelOrder({
+          orderId,
+          chefId,
+          fromStatuses: [previous],
+          restoreQuantity: previous === "pending" || previous === "confirmed",
+        });
+        if (!restored) throw new StoreError("That status change is not allowed.", 409);
+        order.status = "cancelled";
+        order.refuseReason = formatClosureReason(
+          "chef",
+          previous === "pending" ? "cancelled_before_prep" : "cancelled_after_prep",
+        );
         const meal = db.meals.find((item) => item.id === order.mealId);
-        if (meal) {
+        if (meal && (previous === "pending" || previous === "confirmed")) {
           meal.remainingQuantity = Math.min(meal.maxQuantity, meal.remainingQuantity + order.quantity);
         }
+        logRefusalPenalty(db, order);
+        rememberDb(db);
+        await safeStatusEvent({
+          orderId,
+          fromStatus: previous,
+          toStatus: "cancelled",
+          actorRole: "chef",
+          actorId: chefId,
+          reason: order.refuseReason,
+        });
+        return toChefOrder(db, order);
       }
-      return toChefOrder(db, order);
-    }, true);
+
+      if (status === "confirmed" && previous === "pending") {
+        await atomicConfirmOrder({ orderId, chefId });
+        order.status = "confirmed";
+        rememberDb(db);
+        await safeStatusEvent({
+          orderId,
+          fromStatus: previous,
+          toStatus: "confirmed",
+          actorRole: "chef",
+          actorId: chefId,
+          reason: null,
+        });
+        return toChefOrder(db, order);
+      }
+
+      if (status === "delivered" && previous !== "delivered") {
+        throw new StoreError("Drivers confirm delivery with the OTP code.", 409);
+      }
+
+      throw new StoreError("That status change is not allowed.", 409);
+    });
   },
 
   async adminOverview(): Promise<AdminOverview> {
@@ -1680,9 +2077,10 @@ export const localRepository = {
         .slice(0, 12)
         .map((order) => toRecent(db, order));
       return {
-        commissionPerMealMad: PLATFORM_COMMISSION_MAD,
-        deliveryFeeMad: DELIVERY_FEE_MAD,
-        driverCommissionPerTripMad: DRIVER_COMMISSION_MAD,
+        // Legacy fee constants are frozen / not owner-approved — do not surface as live rates.
+        commissionPerMealMad: 0,
+        deliveryFeeMad: 0,
+        driverCommissionPerTripMad: 0,
         chefWalletCommissionMad: settingsOf(db).chefCommissionMad,
         driverWalletCommissionMad: settingsOf(db).driverCommissionMad,
         serviceDate: today,
@@ -1697,6 +2095,11 @@ export const localRepository = {
           order.status === "picked_up",
         ).length,
         cancelledOrders: db.orders.filter((order) => order.status === "cancelled").length,
+        platformRevenueMad: roundMoney(
+          active
+            .filter((order) => order.status === "delivered")
+            .reduce((sum, order) => sum + order.commissionMad + order.driverCommissionMad, 0),
+        ),
         kitchens,
         recentOrders,
         drivers: [...db.drivers]
@@ -1750,54 +2153,163 @@ export const localRepository = {
   },
 
   async acceptDelivery(driverId: string, orderId: string): Promise<DeliveryJob> {
-    return withDb((db) => {
-      const driver = requireDriver(db, driverId);
-      if (driver.status !== "approved") {
-        throw new StoreError("Your application is still waiting for approval.", 403);
-      }
-      assertWalletOpen(db, driver.id);
-      const order = db.orders.find((item) => item.id === orderId);
-      if (!order) throw new StoreError("That delivery could not be found.", 404);
-      const chef = db.chefs.find((item) => item.id === order.chefId);
-      if (!chef || chef.city !== driver.city) {
-        throw new StoreError("That delivery is outside your zone.", 409);
-      }
-      if (order.status !== "confirmed" || order.driverId) {
-        throw new StoreError("That delivery was just taken.", 409);
-      }
-      order.status = "assigned";
-      order.driverId = driver.id;
-      return toJob(db, order);
-    }, true);
+    return withAdvisoryLock("accept_delivery", () =>
+      locked(async () => {
+        const loaded = await readDb(true);
+        const db = loaded.db;
+        const driver = requireDriver(db, driverId);
+        if (driver.status !== "approved") {
+          throw new StoreError("Your application is still waiting for approval.", 403);
+        }
+        assertWalletOpen(db, driver.id);
+        const order = db.orders.find((item) => item.id === orderId);
+        if (!order) throw new StoreError("That delivery could not be found.", 404);
+        const chef = db.chefs.find((item) => item.id === order.chefId);
+        if (!chef || chef.city !== driver.city) {
+          throw new StoreError("That delivery is outside your zone.", 409);
+        }
+        if (order.status !== "confirmed" || order.driverId) {
+          throw new StoreError("That delivery was just taken.", 409);
+        }
+        await atomicAcceptDelivery({ orderId, driverId: driver.id });
+        order.status = "assigned";
+        order.driverId = driver.id;
+        rememberDb(db);
+        await safeStatusEvent({
+          orderId,
+          fromStatus: "confirmed",
+          toStatus: "assigned",
+          actorRole: "driver",
+          actorId: driverId,
+          reason: null,
+        });
+        return toJob(db, order);
+      }),
+    );
   },
 
   async advanceDelivery(
     driverId: string,
     orderId: string,
-    action: "pick_up" | "deliver" | "release",
+    action: "pick_up" | "deliver" | "release" | "refuse" | "not_reachable",
     code?: string,
+    reason?: string,
   ): Promise<DeliveryJob> {
-    return withDb((db) => {
-      requireDriver(db, driverId);
-      const order = db.orders.find((item) => item.id === orderId && item.driverId === driverId);
-      if (!order) throw new StoreError("That delivery is not yours.", 404);
-      if (action === "release") {
-        assertTransition(order.status, "confirmed");
-        order.status = "confirmed";
-        order.driverId = null;
-      } else if (action === "pick_up") {
-        assertTransition(order.status, "picked_up");
-        order.status = "picked_up";
-      } else {
-        assertTransition(order.status, "delivered");
-        if (!codesMatch(order.deliveryCode, code ?? "")) {
-          throw new StoreError("That code does not match.", 409);
+    return withAdvisoryLock(`advance:${orderId}`, () =>
+      locked(async () => {
+        const loaded = await readDb(true);
+        const db = loaded.db;
+        requireDriver(db, driverId);
+        const order = db.orders.find((item) => item.id === orderId && item.driverId === driverId);
+        if (!order) throw new StoreError("That delivery is not yours.", 404);
+        const previous = order.status;
+
+        if (action === "release") {
+          assertTransition(order.status, "confirmed");
+          await atomicAdvanceDelivery({
+            orderId,
+            driverId,
+            fromStatuses: ["assigned"],
+            toStatus: "confirmed",
+            clearDriver: true,
+          });
+          order.status = "confirmed";
+          order.driverId = null;
+        } else if (action === "pick_up") {
+          assertTransition(order.status, "picked_up");
+          await atomicAdvanceDelivery({
+            orderId,
+            driverId,
+            fromStatuses: ["assigned"],
+            toStatus: "picked_up",
+          });
+          order.status = "picked_up";
+        } else if (action === "refuse" || action === "not_reachable") {
+          const next = action === "refuse" ? "refused" : "not_reachable";
+          assertTransition(order.status, next);
+          const detail =
+            reason?.trim() || (action === "refuse" ? "customer_refused_meal" : "customer_unreachable");
+          const closure = formatClosureReason("customer", detail);
+          await atomicAdvanceDelivery({
+            orderId,
+            driverId,
+            fromStatuses: [order.status],
+            toStatus: next,
+            refuseReason: closure,
+          });
+          order.status = next;
+          order.refuseReason = closure;
+          logRefusalPenalty(db, order);
+        } else {
+          assertTransition(order.status, "delivered");
+          await atomicDeliverWithOtp({
+            orderId,
+            driverId,
+            code: code ?? "",
+            verify: verifyPassword,
+          });
+          order.status = "delivered";
+          order.otpAttempts = (order.otpAttempts ?? 0) + 1;
+          // Physical delivery only — settlement stays deferred while financial rules are frozen.
+          trySettleDeliveryCommissions(db, order);
         }
-        order.status = "delivered";
-        chargeDeliveryCommissions(db, order);
+
+        rememberDb(db);
+        await safeStatusEvent({
+          orderId,
+          fromStatus: previous,
+          toStatus: order.status,
+          actorRole: "driver",
+          actorId: driverId,
+          reason: order.refuseReason ?? null,
+        });
+        return toJob(db, order);
+      }),
+    );
+  },
+
+  async adminResolveOrder(
+    orderId: string,
+    resolution: "cancelled" | "refused" | "not_reachable",
+    reason: string,
+  ): Promise<{ orderId: string; status: OrderStatus }> {
+    return locked(async () => {
+      const loaded = await readDb(true);
+      const db = loaded.db;
+      const order = db.orders.find((item) => item.id === orderId);
+      if (!order) throw new StoreError("That order could not be found.", 404);
+      if (order.status === "delivered") {
+        throw new StoreError("That status change is not allowed.", 409);
       }
-      return toJob(db, order);
-    }, true);
+      const previous = order.status;
+      const closure = formatClosureReason("admin", reason || resolution);
+      const restoreQuantity = previous === "pending" || previous === "confirmed";
+      const result = await atomicAdminResolveOrder({
+        orderId,
+        toStatus: resolution,
+        reason: closure,
+        restoreQuantity,
+      });
+      if (!result) throw new StoreError("That order could not be found.", 404);
+      order.status = resolution;
+      order.refuseReason = closure;
+      if (restoreQuantity) {
+        const meal = db.meals.find((item) => item.id === order.mealId);
+        if (meal) {
+          meal.remainingQuantity = Math.min(meal.maxQuantity, meal.remainingQuantity + order.quantity);
+        }
+      }
+      rememberDb(db);
+      await safeStatusEvent({
+        orderId,
+        fromStatus: previous,
+        toStatus: resolution,
+        actorRole: "admin",
+        actorId: null,
+        reason: closure,
+      });
+      return { orderId, status: resolution };
+    });
   },
 
   async trackOrder(token: string): Promise<OrderTracking> {
@@ -1826,38 +2338,56 @@ export const localRepository = {
   },
 
   async rateOrder(token: string, rating: number, review: string): Promise<OrderTracking> {
-    return withDb((db) => {
-      const order = db.orders.find((item) => item.trackToken === token);
-      if (!order) throw new StoreError("That order could not be found.", 404);
-      if (order.status !== "delivered") throw new StoreError("That status change is not allowed.", 409);
-      if (typeof order.rating === "number" && order.rating >= 1) {
-        throw new StoreError("That status change is not allowed.", 409);
-      }
-      if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
-        throw new StoreError("That status is not recognized.", 400);
-      }
-      order.rating = rating;
-      order.review = review.trim().slice(0, 400) || null;
-      refreshChefAverage(db, order.chefId);
-      const meal = db.meals.find((item) => item.id === order.mealId);
-      const chef = db.chefs.find((item) => item.id === order.chefId);
-      return {
-        orderId: order.id,
-        mealTitle: meal?.title ?? "Meal",
-        kitchenName: chef?.kitchenName ?? "Kitchen",
-        chefId: order.chefId,
-        deliveryAddress: order.deliveryAddress,
-        quantity: order.quantity,
-        totalMad: order.totalMad,
-        deliveryFeeMad: order.deliveryFeeMad,
-        customerNotes: order.customerNotes,
-        status: order.status,
-        deliveryCode: order.deliveryCode,
-        rating: order.rating ?? null,
-        review: order.review ?? null,
-        createdAt: order.createdAt,
-      };
-    }, true);
+    assertDatabaseWriteAllowed("prisma");
+    if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
+      throw new StoreError("That status is not recognized.", 400);
+    }
+    const order = await prisma.order.findFirst({
+      where: { trackToken: token, isDeleted: false },
+    });
+    if (!order) throw new StoreError("That order could not be found.", 404);
+    if (order.flowStatus !== "delivered") throw new StoreError("That status change is not allowed.", 409);
+    if (typeof order.rating === "number" && order.rating >= 1) {
+      throw new StoreError("That status change is not allowed.", 409);
+    }
+    const trimmed = review.trim().slice(0, 400) || null;
+    const updated = await prisma.order.update({
+      where: { id: order.id },
+      data: { rating, review: trimmed },
+    });
+    const rated = await prisma.order.findMany({
+      where: { chefId: order.chefId, rating: { gte: 1 } },
+      select: { rating: true },
+    });
+    const average =
+      rated.length === 0 ? 0 : roundMoney(rated.reduce((sum, row) => sum + (row.rating ?? 0), 0) / rated.length);
+    await prisma.chefProfile.updateMany({
+      where: { OR: [{ id: order.chefId }, { userId: order.chefId }] },
+      data: { averageRating: average },
+    });
+    await bumpDataRevision(prisma);
+    readCache = null;
+    const meal = await prisma.meal.findUnique({ where: { id: order.mealId }, select: { title: true } });
+    const chef = await prisma.chefProfile.findFirst({
+      where: { OR: [{ id: order.chefId }, { userId: order.chefId }] },
+      select: { kitchenName: true },
+    });
+    return {
+      orderId: updated.id,
+      mealTitle: meal?.title ?? "Meal",
+      kitchenName: chef?.kitchenName ?? "Kitchen",
+      chefId: updated.chefId,
+      deliveryAddress: updated.address,
+      quantity: updated.quantity,
+      totalMad: updated.totalPrice,
+      deliveryFeeMad: updated.deliveryFeeMad,
+      customerNotes: updated.notes ?? "",
+      status: "delivered",
+      deliveryCode: updated.otpCode,
+      rating: updated.rating ?? null,
+      review: updated.review ?? null,
+      createdAt: updated.createdAt.toISOString(),
+    };
   },
 
   async publicChef(chefId: string, viewerId: string | null): Promise<PublicChefProfile> {
@@ -1889,24 +2419,36 @@ export const localRepository = {
   },
 
   async followChef(customerId: string, chefId: string): Promise<{ following: boolean }> {
-    return withDb((db) => {
-      const customer = db.profiles.find((item) => item.id === customerId && item.role === "customer");
-      if (!customer) throw new StoreError("Sign in to continue.", 403);
-      const chef = db.chefs.find((item) => item.id === chefId && item.isActive);
-      if (!chef || chef.approvalStatus !== "approved") throw new StoreError("That kitchen could not be found.", 404);
-      const exists = db.follows.find((row) => row.customerId === customerId && row.chefId === chef.profileId);
-      if (exists) {
-        db.follows = db.follows.filter((row) => row.id !== exists.id);
-        return { following: false };
-      }
-      db.follows.push({
+    assertDatabaseWriteAllowed("prisma");
+    const customer = await prisma.user.findFirst({
+      where: { id: customerId, role: "CUSTOMER", isDeleted: false },
+      select: { id: true },
+    });
+    if (!customer) throw new StoreError("Sign in to continue.", 403);
+    const chef = await prisma.chefProfile.findFirst({
+      where: { id: chefId, isActive: true, user: { approvalStatus: "APPROVED", isDeleted: false } },
+      select: { userId: true },
+    });
+    if (!chef) throw new StoreError("That kitchen could not be found.", 404);
+    const existing = await prisma.follow.findFirst({
+      where: { customerId, chefId: chef.userId },
+    });
+    if (existing) {
+      await prisma.follow.delete({ where: { id: existing.id } });
+      await bumpDataRevision(prisma);
+      readCache = null;
+      return { following: false };
+    }
+    await prisma.follow.create({
+      data: {
         id: randomUUID(),
         customerId,
-        chefId: chef.profileId,
-        createdAt: new Date().toISOString(),
-      });
-      return { following: true };
-    }, true);
+        chefId: chef.userId,
+      },
+    });
+    await bumpDataRevision(prisma);
+    readCache = null;
+    return { following: true };
   },
 
   async listFollowingMeals(customerId: string): Promise<MealListResponse> {
@@ -2145,11 +2687,22 @@ export const localRepository = {
   },
 
   async addEmailCapture(email: string, source: string): Promise<void> {
-    await withDb((db) => {
-      const key = email.toLowerCase();
-      if (db.email_captures.some((item) => item.email.toLowerCase() === key && item.source === source)) return;
-      db.email_captures.push({ email, created_at: new Date().toISOString(), source });
-    }, true);
+    assertDatabaseWriteAllowed("prisma");
+    const key = email.toLowerCase();
+    const existing = await prisma.emailCapture.findFirst({
+      where: { email: { equals: key, mode: "insensitive" }, source },
+      select: { id: true },
+    });
+    if (existing) return;
+    await prisma.emailCapture.create({
+      data: {
+        id: randomUUID(),
+        email,
+        source,
+      },
+    });
+    await bumpDataRevision(prisma);
+    readCache = null;
   },
 
   async listEmailCaptures(): Promise<EmailCapture[]> {
@@ -2157,19 +2710,33 @@ export const localRepository = {
   },
 
   async saveChefSignature(chefId: string, signature: string): Promise<void> {
-    await withDb((db) => {
-      const chef = db.chefs.find((item) => item.id === chefId);
-      if (!chef) throw new StoreError("That kitchen could not be found.", 404);
-      chef.signatureDataUrl = signature;
-    }, true);
+    assertDatabaseWriteAllowed("prisma");
+    const chef = await prisma.chefProfile.findFirst({
+      where: { id: chefId },
+      select: { userId: true },
+    });
+    if (!chef) throw new StoreError("That kitchen could not be found.", 404);
+    await prisma.user.update({
+      where: { id: chef.userId },
+      data: { signatureUrl: signature },
+    });
+    await bumpDataRevision(prisma);
+    readCache = null;
   },
 
   async saveDriverSignature(driverId: string, signature: string): Promise<void> {
-    await withDb((db) => {
-      const driver = db.drivers.find((item) => item.id === driverId);
-      if (!driver) throw new StoreError("That driver could not be found.", 404);
-      driver.signatureDataUrl = signature;
-    }, true);
+    assertDatabaseWriteAllowed("prisma");
+    const driver = await prisma.user.findFirst({
+      where: { id: driverId, role: "DRIVER" },
+      select: { id: true },
+    });
+    if (!driver) throw new StoreError("That driver could not be found.", 404);
+    await prisma.user.update({
+      where: { id: driverId },
+      data: { signatureUrl: signature },
+    });
+    await bumpDataRevision(prisma);
+    readCache = null;
   },
 
   async saveProfileExtras(
@@ -2205,11 +2772,19 @@ export const localRepository = {
   },
 
   async attachOrderEmail(orderId: string, email: string): Promise<void> {
-    return withDb((db) => {
-      const order = db.orders.find((item) => item.id === orderId);
-      if (!order) throw new StoreError("That order could not be found.", 404);
-      if (!order.customerEmail) order.customerEmail = email;
-    }, true);
+    assertDatabaseWriteAllowed("prisma");
+    const order = await prisma.order.findFirst({
+      where: { id: orderId },
+      select: { id: true, customerEmail: true },
+    });
+    if (!order) throw new StoreError("That order could not be found.", 404);
+    if (order.customerEmail) return;
+    await prisma.order.update({
+      where: { id: orderId },
+      data: { customerEmail: email },
+    });
+    await bumpDataRevision(prisma);
+    readCache = null;
   },
 
   async walletView(ownerId: string): Promise<WalletView> {
@@ -2314,12 +2889,25 @@ export const localRepository = {
   },
 
   async updateCommissionSettings(input: CommissionSettings): Promise<CommissionSettings> {
-    return withDb((db) => {
-      db.settings = {
+    assertDatabaseWriteAllowed("prisma");
+    // Financial freeze remains enforced by API/business callers; this only targets the write path.
+    const settings = await prisma.platformSetting.upsert({
+      where: { id: "default" },
+      create: {
+        id: "default",
         chefCommissionMad: input.chefCommissionMad,
         driverCommissionMad: input.driverCommissionMad,
-      };
-      return db.settings;
-    }, true);
+      },
+      update: {
+        chefCommissionMad: input.chefCommissionMad,
+        driverCommissionMad: input.driverCommissionMad,
+      },
+    });
+    await bumpDataRevision(prisma);
+    readCache = null;
+    return {
+      chefCommissionMad: settings.chefCommissionMad,
+      driverCommissionMad: settings.driverCommissionMad,
+    };
   },
 };

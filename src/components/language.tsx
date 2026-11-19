@@ -49,9 +49,8 @@ export function LanguageProvider({ initial, children }: { initial: Lang; childre
   useEffect(() => {
     document.documentElement.lang = lang;
     document.documentElement.dir = lang === "ar" ? "rtl" : "ltr";
+    setFormatLang(lang);
   }, [lang]);
-
-  setFormatLang(lang);
 
   const value = useMemo<LanguageValue>(() => {
     return {

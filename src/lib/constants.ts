@@ -1,10 +1,14 @@
-/** Platform fee taken on every portion sold. Stored on the order at checkout. */
+/**
+ * FROZEN / NOT OWNER-APPROVED as final production rules.
+ * Do not treat these numbers as business truth. Wallet deductions and delivery-fee
+ * application must go through src/lib/financial-rules.ts (currently fail-closed).
+ */
 export const PLATFORM_COMMISSION_MAD = 3;
 
-/** Flat fee for one delivery trip. The driver keeps this minus the trip commission. */
+/** FROZEN — not an owner-approved separate delivery fee. */
 export const DELIVERY_FEE_MAD = 15;
 
-/** Platform fee taken on every completed delivery trip. */
+/** FROZEN — not an owner-approved driver commission constant. */
 export const DRIVER_COMMISSION_MAD = 3;
 
 export const SERVICE_CITIES = ["Casablanca", "Rabat", "Marrakech"] as const;

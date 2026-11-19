@@ -4,7 +4,7 @@ import { memo, useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { AnimatePresence, motion } from "framer-motion";
-import { DELIVERY_FEE_MAD } from "@/lib/constants";
+import { cashMealTotalMad } from "@/lib/financial-rules";
 import { addCasablancaDays, formatMad, formatServiceDate, formatWhen } from "@/lib/format";
 import { readJson } from "@/lib/read-json";
 import type { MealListResponse, OrderReceipt, PublicMeal } from "@/lib/types";
@@ -297,8 +297,8 @@ function OrderDialog({
     }
   }
 
-  const mealTotal = meal.priceMad * (remaining > 0 ? safeQuantity : 0);
-  const deliveryTotal = remaining > 0 ? DELIVERY_FEE_MAD : 0;
+  // COD meal cash only — no separate delivery fee is owner-approved.
+  const mealTotal = remaining > 0 ? cashMealTotalMad(meal.priceMad, safeQuantity) : 0;
 
   return (
     <motion.div
@@ -360,8 +360,7 @@ function OrderDialog({
             <p>
               {t("order.payLine", {
                 meal: formatMad(receipt.totalMad, lang),
-                delivery: formatMad(receipt.deliveryFeeMad, lang),
-                total: formatMad(receipt.totalMad + receipt.deliveryFeeMad, lang),
+                total: formatMad(receipt.totalMad, lang),
               })}
             </p>
             {receipt.customerNotes ? <p className="text-muted">{receipt.customerNotes}</p> : null}
@@ -487,9 +486,7 @@ function OrderDialog({
             <p className="text-base">
               {t("order.meal")} <span className="font-semibold">{formatMad(mealTotal, lang)}</span>
               {" · "}
-              {t("order.delivery")} <span className="font-semibold">{formatMad(deliveryTotal, lang)}</span>
-              {" · "}
-              {t("order.toPay")} <span className="font-semibold">{formatMad(mealTotal + deliveryTotal, lang)}</span>
+              {t("order.toPay")} <span className="font-semibold">{formatMad(mealTotal, lang)}</span>
             </p>
             {error ? (
               <p role="alert" className="text-base text-terracotta-deep">

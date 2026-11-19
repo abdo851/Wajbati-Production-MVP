@@ -1,5 +1,5 @@
 export type Role = "customer" | "chef" | "admin" | "driver";
-export type OrderStatus = "pending" | "confirmed" | "assigned" | "picked_up" | "delivered" | "cancelled";
+export type OrderStatus = "pending" | "confirmed" | "assigned" | "picked_up" | "delivered" | "cancelled" | "refused" | "not_reachable";
 export type DriverAccountStatus = "pending" | "approved" | "rejected";
 export type ChefApprovalStatus = "pending" | "approved" | "rejected";
 
@@ -255,6 +255,7 @@ export type AdminOverview = {
   weekBooks: FinanceSummary;
   openOrders: number;
   cancelledOrders: number;
+  platformRevenueMad: number;
   kitchens: KitchenStat[];
   recentOrders: RecentOrder[];
   drivers: DriverRecord[];
@@ -327,7 +328,7 @@ export type WalletView = {
   transactions: Array<{
     id: string;
     amountMad: number;
-    note: "commission" | "adjustment";
+    note: "commission" | "adjustment" | "penalty";
     createdAt: string;
   }>;
 };

@@ -279,14 +279,15 @@ export function parseOrderId(value: unknown): { orderId: string } {
   return { orderId };
 }
 
-export function parseOrderAction(value: unknown): { orderId: string; action: "pick_up" | "deliver" | "release"; code: string } {
+export function parseOrderAction(value: unknown): { orderId: string; action: "pick_up" | "deliver" | "release" | "refuse" | "not_reachable"; code: string; reason: string } {
   const { orderId } = parseOrderId(value);
   const body = asRecord(value);
-  if (body.action !== "pick_up" && body.action !== "deliver" && body.action !== "release") {
+  if (body.action !== "pick_up" && body.action !== "deliver" && body.action !== "release" && body.action !== "refuse" && body.action !== "not_reachable") {
     throw new StoreError("That status is not recognized.", 400);
   }
   const code = body.action === "deliver" ? deliveryCode(body.code) : "";
-  return { orderId, action: body.action, code };
+  const reason = typeof body.reason === "string" ? body.reason.trim().slice(0, 120) : "";
+  return { orderId, action: body.action, code, reason };
 }
 
 function deliveryCode(value: unknown): string {

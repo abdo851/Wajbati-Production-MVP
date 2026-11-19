@@ -1,32 +1,37 @@
+import { assertOwnerFinancialRulesApproved } from "@/lib/financial-rules";
 import { roundMoney } from "@/lib/format";
 
-export type DynamicCommission = {
+export type OrderFees = {
   chefPerPortionMad: number;
   driverPerPortionMad: number;
-  chefCommissionMad: number;
-  driverCommissionMad: number;
-  platformCommissionMad: number;
+  chefServiceFee: number;
+  driverCommission: number;
+  platformRevenue: number;
 };
 
-/** Tiered Uber-style fees charged to chef and driver wallets per portion. */
-export function calculateDynamicCommission(mealPrice: number, quantity: number): DynamicCommission {
-  const portions = Math.max(0, Math.floor(quantity));
-  let chefPerPortionMad = 1;
-  let driverPerPortionMad = 1;
-  if (mealPrice >= 60) {
-    chefPerPortionMad = 3;
-    driverPerPortionMad = 3;
-  } else if (mealPrice >= 30) {
-    chefPerPortionMad = 2;
-    driverPerPortionMad = 2;
-  }
-  const chefCommissionMad = roundMoney(chefPerPortionMad * portions);
-  const driverCommissionMad = roundMoney(driverPerPortionMad * portions);
+/**
+ * FROZEN — amounts previously proposed in code are NOT owner-approved.
+ * Calling this fails closed until OWNER_FINANCIAL_RULES_APPROVED is set after an owner decision.
+ */
+export function calculateOrderFees(mealPrice: number, quantity: number): OrderFees {
+  assertOwnerFinancialRulesApproved("calculateOrderFees");
+  // Unreachable until the owner unlocks financial rules and supplies approved amounts.
+  void mealPrice;
+  void quantity;
   return {
-    chefPerPortionMad,
-    driverPerPortionMad,
-    chefCommissionMad,
-    driverCommissionMad,
-    platformCommissionMad: roundMoney(chefCommissionMad + driverCommissionMad),
+    chefPerPortionMad: 0,
+    driverPerPortionMad: 0,
+    chefServiceFee: 0,
+    driverCommission: 0,
+    platformRevenue: 0,
   };
+}
+
+/** @deprecated Use calculateOrderFees only after owner approval. Kept name for older imports. */
+export function calculateDynamicCommission(mealPrice: number, quantity: number): OrderFees {
+  return calculateOrderFees(mealPrice, quantity);
+}
+
+export function roundFee(value: number) {
+  return roundMoney(value);
 }

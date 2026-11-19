@@ -2,8 +2,27 @@ import { cookies } from "next/headers";
 import { LoginFailure, StoreError } from "@/lib/errors";
 import { authenticate, authenticateCustomer, authenticateDriver, dataProvider, findUser } from "@/lib/db";
 import { freshExpiry, openSession, sealSession, SESSION_COOKIE, type SessionPayload } from "@/lib/auth/session";
-import { isSuperAdmin } from "@/lib/super-admin";
+import { isSuperAdmin, ADMIN_AUTH_BYPASSED, SUPER_ADMIN_EMAIL } from "@/lib/super-admin";
 import type { AuthUser } from "@/lib/types";
+
+// TODO: RE-ENABLE ADMIN AUTH BEFORE PUBLIC LAUNCH
+const MOCK_ADMIN: AuthUser = {
+  id: "test-mode-admin",
+  email: SUPER_ADMIN_EMAIL,
+  fullName: "مدير المنصة (وضع الاختبار)",
+  role: "admin",
+  chefId: null,
+  kitchenName: null,
+  driverId: null,
+  driverStatus: null,
+  city: null,
+  phone: null,
+  vehicle: null,
+  documentsReady: null,
+  chefApprovalStatus: "approved",
+  approvalStatus: "approved",
+  emailConfirmed: true,
+};
 
 export type CurrentUser = {
   user: AuthUser;
@@ -19,7 +38,11 @@ async function payload(): Promise<SessionPayload | null> {
 
 export async function getCurrentUser(): Promise<CurrentUser | null> {
   const session = await payload();
-  if (!session) return null;
+  if (!session) {
+    // Local-dev-only admin convenience; gated in super-admin.ts (never on Neon/production).
+    if (ADMIN_AUTH_BYPASSED) return { user: MOCK_ADMIN };
+    return null;
+  }
   if (session.provider === "supabase") {
     if (!session.accessToken) return null;
     const user = await findUser(session.userId ?? "", session.accessToken);
@@ -33,6 +56,8 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
 export async function requireDesk(desk: "chef" | "admin" | "driver"): Promise<CurrentUser> {
   const current = await getCurrentUser();
   if (!current) throw new StoreError("Sign in to continue.", 401);
+  // Bypass applies only to the admin desk, and only when ADMIN_AUTH_BYPASSED is safely enabled.
+  if (ADMIN_AUTH_BYPASSED && desk === "admin") return current;
   if (desk === "admin" && !isSuperAdmin(current.user)) {
     throw new StoreError("Sign in to continue.", 401);
   }
