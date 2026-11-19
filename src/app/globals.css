@@ -1,18 +1,19 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f6f4f1;
+  --background: #f7f4ef;
   --foreground: #1b1611;
-  --card: #ffffff;
-  --muted: #8b8177;
-  --line: #e8e2da;
+  --card: #fffcf8;
+  --muted: #7a7168;
+  --muted-strong: #5f574f;
+  --line: #e4ddd3;
   --terracotta: #a44e32;
   --terracotta-deep: #7e3722;
   --saffron: #c8963c;
   --olive: #5c7250;
   --gold: #c9a24b;
-  --gold-deep: #a97f2c;
-  --surface: #efece7;
+  --gold-deep: #9a7428;
+  --surface: #f0ebe3;
   --ink: #17130f;
 }
 
@@ -83,14 +84,20 @@
   --font-arabic: var(--font-alexandria), var(--font-outfit), ui-sans-serif, sans-serif;
 }
 
+html {
+  /* Prevent fixed full-bleed bars (bottom nav) from creating horizontal scroll
+     when the layout viewport and scrollbar gutter disagree. */
+  overflow-x: clip;
+}
+
 body {
   background:
-    radial-gradient(1100px 460px at 85% -12%, rgb(201 162 75 / 14%), transparent 58%),
-    radial-gradient(900px 420px at -5% 0%, rgb(164 78 50 / 8%), transparent 50%),
-    linear-gradient(180deg, #f8f6f3 0%, var(--background) 42%);
+    radial-gradient(900px 380px at 92% -8%, rgb(201 162 75 / 10%), transparent 55%),
+    linear-gradient(180deg, #faf7f2 0%, var(--background) 38%);
   background-attachment: fixed;
   color: var(--foreground);
   font-family: var(--font-sans);
+  overflow-x: clip;
 }
 
 ::selection {

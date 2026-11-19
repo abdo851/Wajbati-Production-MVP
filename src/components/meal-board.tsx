@@ -41,14 +41,14 @@ export function MealBoard() {
   const kitchens = new Set(meals.map((meal) => meal.kitchenName)).size;
 
   return (
-    <section id="meals" className="mx-auto max-w-6xl px-3 py-8 sm:px-6">
+    <section id="meals" className="mx-auto max-w-6xl scroll-mt-20 px-3 py-8 sm:px-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <div className="flex items-center gap-3">
-            <h2 className="font-display text-4xl">{t("board.title")}</h2>
+          <div className="flex flex-wrap items-center gap-3">
+            <h2 className="font-display text-[1.65rem] leading-tight text-ink sm:text-3xl">{t("board.title")}</h2>
             <LiveDot />
           </div>
-          <p className="mt-2 text-base leading-7 text-muted">
+          <p className="mt-2 text-sm leading-7 text-[color:var(--muted-strong)] sm:text-base">
             {data
               ? t("board.summary", {
                   date: formatServiceDate(data.serviceDate, lang),
@@ -63,7 +63,7 @@ export function MealBoard() {
           </p>
         </div>
       </div>
-      <div className="mt-6 flex flex-wrap gap-2">
+      <div className="mt-5 flex flex-wrap gap-2">
         {([
           ["today", t("meal.today")],
           ["yesterday", t("meal.yesterday")],
@@ -72,7 +72,11 @@ export function MealBoard() {
           <button
             key={id}
             type="button"
-            className={`min-h-10 rounded-full px-4 text-sm font-semibold transition duration-200 ${range === id ? "bg-gradient-to-l from-gold to-gold-deep text-white shadow-[0_8px_20px_-8px_rgba(169,127,44,0.7)]" : "border border-line bg-card text-foreground hover:border-gold/50 hover:bg-gold/5"}`}
+            className={`min-h-10 rounded-full px-4 text-sm font-semibold transition duration-200 ${
+              range === id
+                ? "bg-ink text-white shadow-[0_8px_18px_-10px_rgba(23,19,15,0.45)]"
+                : "border border-line bg-card text-foreground hover:border-gold/45 hover:bg-gold/5"
+            }`}
             onClick={() => setRange(id)}
           >
             {label}
@@ -88,7 +92,12 @@ export function MealBoard() {
         {(loading && !data) || !minSplashPassed ? <SplashScreen key="splash" /> : null}
       </AnimatePresence>
       {!loading && !error && meals.length === 0 ? (
-        <p className="lift-card mt-8 rounded-3xl px-5 py-10 text-center text-base text-muted">{t("board.empty")}</p>
+        <div className="mt-8 rounded-[1.35rem] border border-dashed border-line bg-surface/70 px-5 py-11 text-center">
+          <p className="font-display text-xl text-ink">{t("board.emptyTitle")}</p>
+          <p className="mx-auto mt-3 max-w-sm text-sm leading-7 text-[color:var(--muted-strong)]">
+            {t("board.emptyBody")}
+          </p>
+        </div>
       ) : null}
       <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4">
         {meals.map((meal, index) => (
@@ -128,12 +137,12 @@ const MealCard = memo(
 
   return (
     <motion.article
-      initial={{ opacity: 0, y: 26, scale: 0.97 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      transition={{ duration: 0.45, delay: Math.min(index * 0.06, 0.4), ease: [0.22, 1, 0.36, 1] }}
-      whileHover={{ y: -6 }}
-      whileTap={{ scale: 0.98 }}
-      className="group flex flex-col overflow-hidden rounded-3xl border border-line bg-card shadow-lux transition-shadow duration-300 hover:shadow-lux-lg"
+      initial={{ opacity: 0, y: 18 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4, delay: Math.min(index * 0.05, 0.35), ease: [0.22, 1, 0.36, 1] }}
+      whileHover={{ y: -3 }}
+      whileTap={{ scale: 0.985 }}
+      className="group flex flex-col overflow-hidden rounded-[1.25rem] border border-line bg-card shadow-[0_1px_2px_rgb(23_19_15_/0.04),0_14px_32px_-22px_rgb(23_19_15_/0.2)] transition-shadow duration-300 hover:shadow-lux"
     >
       <div className="relative aspect-square w-full overflow-hidden bg-surface">
         {photo ? (
@@ -143,14 +152,21 @@ const MealCard = memo(
             alt=""
             loading="lazy"
             decoding="async"
-            className="h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-110"
+            className="h-full w-full object-cover transition-transform duration-500 ease-out group-hover:scale-[1.04]"
           />
         ) : (
-          <span className="flex h-full items-center justify-center text-3xl text-muted/40" aria-hidden="true">🍽</span>
+          <span className="flex h-full items-center justify-center bg-[linear-gradient(160deg,#f3eee6,#e8e0d4)] text-sm font-medium text-[color:var(--muted-strong)]" aria-hidden="true">
+            Righ
+          </span>
         )}
+        {!soldOut ? (
+          <span className="absolute start-2 top-2 rounded-full bg-white/92 px-2 py-0.5 text-[10px] font-bold text-olive shadow-sm">
+            {t("board.left", { left: meal.remainingQuantity, max: meal.maxQuantity })}
+          </span>
+        ) : null}
         {soldOut ? (
           <span className="absolute inset-0 flex items-center justify-center bg-ink/45 backdrop-blur-[2px]">
-            <span className="rounded-full bg-white/90 px-4 py-1.5 text-sm font-bold text-ink">{t("board.soldOut")}</span>
+            <span className="rounded-full bg-white/92 px-3 py-1 text-xs font-bold text-ink">{t("board.soldOut")}</span>
           </span>
         ) : null}
         {photos.length > 1 ? (
@@ -161,18 +177,18 @@ const MealCard = memo(
         ) : null}
       </div>
       <div className="flex flex-1 flex-col gap-1 p-3">
-        <h3 className="line-clamp-2 min-h-10 text-sm font-semibold leading-5 text-foreground">{meal.title}</h3>
+        <h3 className="line-clamp-2 min-h-10 text-sm font-semibold leading-5 text-ink">{meal.title}</h3>
         {meal.chefId ? (
           <Link href={`/chef/${meal.chefId}`} className="truncate text-xs font-medium text-gold-deep underline-offset-2 hover:underline">
             {meal.kitchenName}
           </Link>
         ) : (
-          <p className="truncate text-xs text-muted">{meal.kitchenName}</p>
+          <p className="truncate text-xs text-[color:var(--muted-strong)]">{meal.kitchenName}</p>
         )}
-        <p className="text-base font-bold text-foreground">{formatMad(meal.priceMad, lang)}</p>
+        <p className="text-base font-bold text-ink">{formatMad(meal.priceMad, lang)}</p>
         <button
           type="button"
-          className="mt-auto inline-flex h-9 items-center justify-center rounded-full bg-gradient-to-l from-gold to-gold-deep px-3 text-xs font-bold text-white shadow-[0_8px_18px_-8px_rgba(169,127,44,0.7)] transition duration-200 hover:brightness-105 active:scale-[0.97] disabled:from-line disabled:to-line disabled:text-muted disabled:shadow-none"
+          className="mt-auto inline-flex h-9 items-center justify-center rounded-full bg-ink px-3 text-xs font-bold text-white transition duration-200 hover:bg-ink/90 active:scale-[0.97] disabled:bg-line disabled:text-muted"
           disabled={soldOut || !canOrder}
           onClick={() => onOrder(meal)}
         >

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { LanguageDialog, LanguageMenu, useI18n } from "@/components/language";
 import { VISIT_KEY } from "@/components/customer-welcome";
 import { PwaInstallButton } from "@/components/pwa-install-button";
@@ -10,15 +10,16 @@ import { useSession } from "@/components/use-session";
 import { getDeviceBrandName } from "@/lib/device-brand";
 
 function Mark() {
+  const gradientId = useId();
   return (
     <svg viewBox="0 0 40 40" className="size-9 drop-shadow-[0_6px_18px_rgba(169,127,44,0.35)]" aria-hidden="true">
       <defs>
-        <linearGradient id="wajbati-mark-gold" x1="0" y1="0" x2="40" y2="40" gradientUnits="userSpaceOnUse">
+        <linearGradient id={gradientId} x1="0" y1="0" x2="40" y2="40" gradientUnits="userSpaceOnUse">
           <stop offset="0" stopColor="#DDB964" />
           <stop offset="1" stopColor="#A97F2C" />
         </linearGradient>
       </defs>
-      <rect width="40" height="40" rx="14" fill="url(#wajbati-mark-gold)" />
+      <rect width="40" height="40" rx="14" fill={`url(#${gradientId})`} />
       <path d="M9 25c0-6.2 4.8-11 11-11s11 4.8 11 11v1.5H9V25z" className="fill-white" />
       <path d="M14 14.5c1.4-3.6 10.6-3.6 12 0" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" />
       <circle cx="20" cy="8.5" r="1.5" className="fill-white" opacity="0.85" />
@@ -43,14 +44,26 @@ export function ProfilePhoto({ src, label, className = "size-11" }: { src?: stri
   );
 }
 
-function MenuButton({ open, onClick }: { open: boolean; onClick: () => void }) {
+function MenuButton({
+  open,
+  onClick,
+  visuallyHidden = false,
+}: {
+  open: boolean;
+  onClick: () => void;
+  visuallyHidden?: boolean;
+}) {
   const { t } = useI18n();
   return (
     <button
       type="button"
-      className="inline-flex size-10 items-center justify-center rounded-full border border-line bg-card/85 text-foreground transition duration-200 hover:border-gold/60 hover:bg-gold/5"
+      className={`inline-flex size-10 shrink-0 items-center justify-center rounded-full border border-line bg-card/85 text-foreground transition duration-200 hover:border-gold/60 hover:bg-gold/5 ${
+        visuallyHidden ? "invisible pointer-events-none" : ""
+      }`}
       aria-expanded={open}
       aria-label={t("menu.open")}
+      aria-hidden={visuallyHidden || undefined}
+      tabIndex={visuallyHidden ? -1 : undefined}
       onClick={onClick}
     >
       <span className="flex w-4 flex-col gap-1" aria-hidden="true">
@@ -67,12 +80,14 @@ export function SiteHeader() {
   const { session } = useSession();
   const [open, setOpen] = useState(false);
   const [intent, setIntent] = useState<string | null>(null);
+  const [intentReady, setIntentReady] = useState(false);
   const [brand, setBrand] = useState("Righ");
   const user = session?.user ?? null;
   const name = user?.fullName;
   const deskHref = user?.role === "chef" ? "/chef" : user?.role === "driver" ? "/driver" : null;
   const staff = user?.role === "chef" || user?.role === "driver" || user?.role === "admin";
-  const hideMenu = intent === "order" && !staff;
+  // Only apply localStorage-driven hide after mount so SSR and first client paint match.
+  const hideMenu = intentReady && intent === "order" && !staff;
 
   useEffect(() => {
     const timeout = window.setTimeout(() => setBrand(getDeviceBrandName()), 0);
@@ -85,6 +100,8 @@ export function SiteHeader() {
         setIntent(window.localStorage.getItem(VISIT_KEY));
       } catch {
         setIntent(null);
+      } finally {
+        setIntentReady(true);
       }
     }
     sync();
@@ -100,7 +117,7 @@ export function SiteHeader() {
     <>
       <header className="glass sticky top-0 z-20 border-b border-line/60 shadow-[0_1px_0_rgba(23,19,15,0.03)]">
         <div className="mx-auto flex h-14 max-w-6xl items-center gap-1.5 px-2.5 sm:gap-2 sm:px-5">
-          {hideMenu ? <span className="size-10 shrink-0" /> : <MenuButton open={open} onClick={() => setOpen(true)} />}
+          <MenuButton open={open} onClick={() => setOpen(true)} visuallyHidden={hideMenu} />
           <Link href="/" className="flex shrink-0 items-center" aria-label={brand}>
             <span className="[&>svg]:size-8 sm:[&>svg]:size-9">
               <Mark />

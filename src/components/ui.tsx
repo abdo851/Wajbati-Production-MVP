@@ -29,10 +29,10 @@ export const inputClass =
   "w-full rounded-2xl border border-line bg-white px-4 py-3 text-base text-foreground outline-none transition placeholder:text-muted/60 focus-visible:border-gold focus-visible:ring-4 focus-visible:ring-gold/15";
 
 export const primaryButtonClass =
-  "inline-flex min-h-11 items-center justify-center rounded-full bg-gradient-to-l from-gold to-gold-deep px-5 py-2.5 text-base font-semibold text-white shadow-[0_10px_24px_-10px_rgba(169,127,44,0.7)] transition duration-200 hover:shadow-[0_14px_30px_-10px_rgba(169,127,44,0.8)] hover:brightness-105 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none";
+  "inline-flex min-h-11 items-center justify-center rounded-full bg-ink px-5 py-2.5 text-base font-semibold text-white shadow-[0_10px_22px_-12px_rgba(23,19,15,0.55)] transition duration-200 hover:bg-ink/90 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none";
 
 export const quietButtonClass =
-  "inline-flex min-h-11 items-center justify-center rounded-full border border-line bg-white px-4 py-2 text-base font-semibold text-foreground transition duration-200 hover:border-gold/60 hover:bg-gold/5 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50";
+  "inline-flex min-h-11 items-center justify-center rounded-full border border-line bg-white px-4 py-2 text-base font-semibold text-foreground transition duration-200 hover:border-gold/50 hover:bg-gold/5 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50";
 
 export function LiveDot() {
   const { t } = useI18n();

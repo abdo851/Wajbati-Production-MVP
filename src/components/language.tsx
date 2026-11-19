@@ -98,17 +98,19 @@ export function LanguageMenu() {
   return (
     <button
       type="button"
-      className="inline-flex min-h-10 shrink-0 items-center gap-1 rounded-full border border-line bg-card px-2 text-[11px] font-semibold text-foreground shadow-[0_8px_16px_-12px_rgba(90,48,20,0.8)] transition duration-200 hover:border-gold/60 hover:bg-gold/5 sm:min-h-11 sm:gap-1.5 sm:px-3 sm:text-sm"
+      className="inline-flex min-h-10 max-w-[7.5rem] shrink-0 items-center gap-1 rounded-full border border-line/90 bg-white/85 px-2 text-[11px] font-semibold text-ink shadow-[0_6px_14px_-12px_rgba(23,19,15,0.5)] transition duration-200 hover:border-gold/55 hover:bg-gold/5 sm:max-w-none sm:min-h-11 sm:gap-2 sm:px-3.5 sm:text-sm"
       aria-haspopup="dialog"
       aria-expanded={languageOpen}
       aria-label={t("lang.label")}
       onClick={openLanguage}
     >
-      <svg viewBox="0 0 24 24" className="size-4" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8">
+      <svg viewBox="0 0 24 24" className="size-4 shrink-0" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.7">
         <circle cx="12" cy="12" r="9" />
         <path d="M3 12h18M12 3c2.5 2.8 3.8 5.8 3.8 9s-1.3 6.2-3.8 9c-2.5-2.8-3.8-5.8-3.8-9s1.3-6.2 3.8-9z" />
       </svg>
-      <span>{t(lang === "ar" ? "lang.ar" : lang === "fr" ? "lang.fr" : "lang.en")}</span>
+      <span className="max-w-[4.5rem] truncate sm:max-w-none">
+        {t(lang === "ar" ? "lang.ar" : lang === "fr" ? "lang.fr" : "lang.en")}
+      </span>
     </button>
   );
 }
@@ -148,12 +150,12 @@ export function LanguageDialog() {
         role="dialog"
         aria-modal="true"
         aria-labelledby="language-title"
-        className="relative z-10 w-full max-w-[300px] rounded-3xl border border-white/60 bg-white/75 p-4 shadow-lux-lg backdrop-blur-xl"
-        initial={{ opacity: 0, scale: 0.92, y: -10 }}
+        className="relative z-10 w-full max-w-[300px] rounded-[1.35rem] border border-line bg-[color:rgb(255_252_248_/0.94)] p-4 shadow-lux-lg backdrop-blur-xl"
+        initial={{ opacity: 0, scale: 0.94, y: -8 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         transition={{ type: "spring", stiffness: 380, damping: 30 }}
       >
-        <h2 id="language-title" className="font-display text-xl">
+        <h2 id="language-title" className="font-display text-lg text-ink">
           {t("lang.preferred")}
         </h2>
         <div className="mt-3 grid gap-2">
@@ -163,7 +165,11 @@ export function LanguageDialog() {
               <button
                 key={choice.id}
                 type="button"
-                className={`lift-card flex min-h-11 items-center justify-between rounded-2xl px-3.5 text-start ${active ? "border-gold" : ""}`}
+                className={`flex min-h-12 items-center justify-between rounded-2xl border px-3.5 text-start transition ${
+                  active
+                    ? "border-gold/70 bg-gold/10"
+                    : "border-line bg-white hover:border-gold/40 hover:bg-gold/5"
+                }`}
                 aria-pressed={active}
                 onClick={() => {
                   setLang(choice.id);
@@ -171,10 +177,14 @@ export function LanguageDialog() {
                 }}
               >
                 <span>
-                  <span className="block text-base font-semibold">{t(choice.label)}</span>
-                  <span className="block text-xs text-muted">{t(choice.hint)}</span>
+                  <span className="block text-sm font-semibold text-ink sm:text-base">{t(choice.label)}</span>
+                  <span className="block text-xs text-[color:var(--muted-strong)]">{t(choice.hint)}</span>
                 </span>
-                {active ? <span className="font-bold text-gold-deep" aria-hidden="true">✓</span> : null}
+                {active ? (
+                  <span className="inline-flex size-6 items-center justify-center rounded-full bg-ink text-xs font-bold text-white" aria-hidden="true">
+                    ✓
+                  </span>
+                ) : null}
               </button>
             );
           })}

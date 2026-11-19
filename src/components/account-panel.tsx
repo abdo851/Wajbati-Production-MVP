@@ -112,29 +112,36 @@ export function AccountPanel() {
   }
 
   const customer = session?.user?.role === "customer" ? session.user : null;
+  const staff =
+    session?.user?.role === "chef" || session?.user?.role === "driver" || session?.user?.role === "admin"
+      ? session.user
+      : null;
+  const deskHref =
+    staff?.role === "chef" ? "/chef" : staff?.role === "driver" ? "/driver/dashboard" : staff?.role === "admin" ? "/admin" : null;
 
   return (
-    <main className="mx-auto w-full max-w-lg flex-1 px-4 py-10 sm:px-6">
-      <p className="text-base font-medium text-olive">{t("account.signedIn")}</p>
-      <h1 className="mt-2 font-display text-4xl">{t("account.title")}</h1>
-      <p className="mt-3 text-base leading-8 text-muted">{t("account.body")}</p>
-      {!session?.user ? (
-        <div className="lift-card mt-8 rounded-3xl border border-line bg-card p-8 text-center">
-          <span className="mx-auto inline-flex size-14 items-center justify-center rounded-full bg-gradient-to-l from-gold to-gold-deep text-white shadow-[0_10px_24px_-10px_rgba(169,127,44,0.8)]" aria-hidden="true">
-            <svg viewBox="0 0 24 24" className="size-7" fill="none" stroke="currentColor" strokeWidth="1.8">
-              <circle cx="10" cy="8" r="3.2" />
-              <path d="M3.5 19c1.4-2.8 3.8-4.3 6.5-4.3 1.9 0 3.6.8 5 2.3" />
-              <path d="M18 14.5v5M15.5 17h5" strokeLinecap="round" />
-            </svg>
-          </span>
-          <p className="mt-4 text-base leading-8 text-muted">{t("account.joinHint")}</p>
-          <Link href="/join" className={`${primaryButtonClass} mt-5 w-full`}>
-            {t("nav.join")}
+    <main className="mx-auto w-full max-w-lg flex-1 px-4 py-8 sm:px-6 sm:py-10">
+      {customer ? (
+        <p className="text-sm font-semibold text-olive">{t("account.signedIn")}</p>
+      ) : null}
+      <h1 className="mt-1 font-display text-[1.85rem] leading-tight text-ink sm:text-4xl">{t("account.title")}</h1>
+      <p className="mt-3 text-sm leading-7 text-[color:var(--muted-strong)] sm:text-base sm:leading-8">
+        {customer ? t("account.body") : staff ? t("account.staffHint") : t("account.guestLead")}
+      </p>
+
+      {staff && deskHref ? (
+        <div className="mt-6 rounded-[1.35rem] border border-line bg-card p-5">
+          <Link href={deskHref} className={`${primaryButtonClass} w-full`}>
+            {t("account.openDesk")}
           </Link>
+          <button type="button" className={`${quietButtonClass} mt-3 w-full`} onClick={() => void signOut()}>
+            {t("menu.signOut")}
+          </button>
         </div>
       ) : null}
+
       {customer ? (
-        <form onSubmit={saveProfile} className="lift-card mt-6 space-y-4 rounded-3xl border border-line bg-card p-5">
+        <form onSubmit={saveProfile} className="mt-6 space-y-4 rounded-[1.35rem] border border-line bg-card p-5">
           <label className="block text-base">
             <span className="mb-1.5 block font-medium">{t("order.name")}</span>
             <input className={inputClass} value={fullName} onChange={(event) => setFullName(event.target.value)} required />
@@ -152,13 +159,27 @@ export function AccountPanel() {
             {t("menu.signOut")}
           </button>
         </form>
-      ) : (
-        <form onSubmit={submit} className="lift-card mt-6 space-y-4 rounded-3xl border border-line bg-card p-5">
-          <div className="grid grid-cols-2 gap-2 rounded-full bg-background p-1">
-            <button type="button" className={`min-h-11 rounded-lg ${mode === "signin" ? "bg-saffron text-foreground" : ""}`} onClick={() => setMode("signin")}>
+      ) : null}
+
+      {!session?.user ? (
+        <form onSubmit={submit} className="mt-6 space-y-4 rounded-[1.35rem] border border-line bg-card p-5">
+          <div className="grid grid-cols-2 gap-1 rounded-2xl bg-surface p-1">
+            <button
+              type="button"
+              className={`min-h-11 rounded-xl text-sm font-semibold transition ${
+                mode === "signin" ? "bg-white text-ink shadow-sm" : "text-[color:var(--muted-strong)]"
+              }`}
+              onClick={() => setMode("signin")}
+            >
               {t("account.signIn")}
             </button>
-            <button type="button" className={`min-h-11 rounded-lg ${mode === "create" ? "bg-saffron text-foreground" : ""}`} onClick={() => setMode("create")}>
+            <button
+              type="button"
+              className={`min-h-11 rounded-xl text-sm font-semibold transition ${
+                mode === "create" ? "bg-white text-ink shadow-sm" : "text-[color:var(--muted-strong)]"
+              }`}
+              onClick={() => setMode("create")}
+            >
               {t("account.create")}
             </button>
           </div>
@@ -192,25 +213,36 @@ export function AccountPanel() {
           <button className={`${primaryButtonClass} w-full`} disabled={pending}>
             {pending ? t("auth.checking") : mode === "create" ? t("auth.register") : t("auth.signIn")}
           </button>
+          <div className="border-t border-line/80 pt-4 text-center">
+            <p className="text-sm text-[color:var(--muted-strong)]">{t("account.joinRoles")}</p>
+            <Link href="/join" className="mt-2 inline-flex min-h-10 items-center justify-center text-sm font-semibold text-gold-deep underline-offset-4 hover:underline">
+              {t("account.joinRolesCta")}
+            </Link>
+          </div>
         </form>
-      )}
-      {session?.user ? <ProfileExtras role={session.user.role} /> : null}
+      ) : null}
+
+      {customer ? <ProfileExtras role={session!.user!.role} /> : null}
       <section id="orders" className="mt-8">
-        <h2 className="font-display text-3xl">{t("menu.orders")}</h2>
-        {orders && orders.length === 0 ? <p className="mt-3 text-base text-muted">{t("account.empty")}</p> : null}
+        <h2 className="font-display text-2xl text-ink sm:text-3xl">{t("menu.orders")}</h2>
+        {orders && orders.length === 0 ? (
+          <p className="mt-3 text-sm text-[color:var(--muted-strong)]">{t("account.empty")}</p>
+        ) : null}
         <ul className="mt-3 space-y-3">
           {(orders ?? []).map((order) => (
-            <li key={order.id} className="lift-card rounded-3xl border border-line bg-card p-4">
+            <li key={order.id} className="rounded-[1.25rem] border border-line bg-card p-4">
               <div className="flex items-start justify-between gap-3">
                 <p className="font-medium">
                   {order.quantity} × {order.mealTitle}
                 </p>
                 <StatusPill status={order.status} />
               </div>
-              <p className="mt-1 text-sm text-muted">
+              <p className="mt-1 text-sm text-[color:var(--muted-strong)]">
                 {order.kitchenName} · {formatMad(order.totalMad, lang)} · {formatWhen(order.createdAt, lang)}
               </p>
-              {order.deliveryCode ? <p className="mt-2 font-display text-3xl tracking-[0.25em]">{order.deliveryCode}</p> : null}
+              {order.deliveryCode ? (
+                <p className="mt-2 font-display text-3xl tracking-[0.25em]">{order.deliveryCode}</p>
+              ) : null}
               {order.status === "assigned" || order.status === "picked_up" || order.status === "delivered" ? (
                 <div className="mt-4">
                   <SecureChat orderId={order.id} />
@@ -219,19 +251,23 @@ export function AccountPanel() {
             </li>
           ))}
         </ul>
-        <h3 className="mt-6 text-lg font-medium">{t("account.device")}</h3>
-        <p className="mt-1 text-sm text-muted">{t("account.guestHint")}</p>
-        {deviceOrders.length === 0 ? <p className="mt-3 text-base text-muted">{t("account.empty")}</p> : null}
+        <h3 className="mt-6 text-lg font-medium text-ink">{t("account.device")}</h3>
+        <p className="mt-1 text-sm text-[color:var(--muted-strong)]">{t("account.guestHint")}</p>
+        {deviceOrders.length === 0 ? (
+          <p className="mt-3 text-sm text-[color:var(--muted-strong)]">{t("account.empty")}</p>
+        ) : null}
         <ul className="mt-3 space-y-3">
           {deviceOrders.map((order) => (
-            <li key={order.id} className="rounded-3xl border border-line bg-card p-4">
+            <li key={order.id} className="rounded-[1.25rem] border border-line bg-card p-4">
               <p className="font-medium">
                 {order.quantity} × {order.mealTitle}
               </p>
-              <p className="mt-1 text-sm text-muted">
+              <p className="mt-1 text-sm text-[color:var(--muted-strong)]">
                 {order.kitchenName} · {formatMad(order.totalMad, lang)}
               </p>
-              {order.deliveryCode ? <p className="mt-2 font-display text-3xl tracking-[0.25em]">{order.deliveryCode}</p> : null}
+              {order.deliveryCode ? (
+                <p className="mt-2 font-display text-3xl tracking-[0.25em]">{order.deliveryCode}</p>
+              ) : null}
             </li>
           ))}
         </ul>
