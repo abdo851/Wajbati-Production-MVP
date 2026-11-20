@@ -13,17 +13,24 @@ export function BottomNav() {
   const { t } = useI18n();
   const { session } = useSession();
   const reduceMotion = useReducedMotion();
-  // Defer framer-motion active pill until after mount so SSR HTML matches
-  // the first client paint (useReducedMotion / layoutId otherwise hydrate-mismatch).
-  const [motionReady, setMotionReady] = useState(false);
+  // Defer session-dependent hrefs and framer-motion until after mount so SSR
+  // HTML matches the first client paint (session / useReducedMotion / layoutId).
+  const [navReady, setNavReady] = useState(false);
   useEffect(() => {
-    setMotionReady(true);
+    setNavReady(true);
   }, []);
   if (pathname.startsWith("/admin") || pathname.startsWith("/driver")) return null;
 
   const role = session?.user?.role;
-  const accountHref =
-    role === "chef" ? "/chef" : role === "driver" ? "/driver/dashboard" : role === "admin" ? "/admin" : "/account";
+  const accountHref = !navReady
+    ? "/account"
+    : role === "chef"
+      ? "/chef"
+      : role === "driver"
+        ? "/driver/dashboard"
+        : role === "admin"
+          ? "/admin"
+          : "/account";
   const showOrders = marketplaceVisibility.showCustomerMealOrderFlow;
 
   const items = [
@@ -53,11 +60,11 @@ export function BottomNav() {
                   (accountHref === "/admin" && pathname.startsWith("/admin"))
                 : pathname === item.href || pathname.startsWith(`${item.href}/`);
           return (
-            <li key={`${item.href}-${item.label}`} className="relative flex-1">
-              {active && !motionReady ? (
+            <li key={item.href} className="relative flex-1">
+              {active && !navReady ? (
                 <span className="absolute inset-x-1 inset-y-0 rounded-2xl bg-brand/12" aria-hidden="true" />
               ) : null}
-              {active && motionReady ? (
+              {active && navReady ? (
                 <motion.span
                   layoutId="bottom-nav-active-pill"
                   className="absolute inset-x-1 inset-y-0 rounded-2xl bg-brand/12"

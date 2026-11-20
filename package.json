@@ -3,10 +3,14 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "node scripts/dev-isolated.mjs",
+    "dev:local": "node scripts/dev-isolated.mjs",
+    "dev:next": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "db:isolated:check": "node -e \"import('./scripts/lib/isolated-local-db.mjs').then(m=>{const meta=m.applyIsolatedLocalDatabaseEnv(); console.log(JSON.stringify({ok:true,hostKind:meta.hostKind,host:meta.host,port:meta.port,database:meta.database,refMatchesPrimary:meta.refMatchesPrimary}))}).catch(e=>{console.error(e.message); process.exit(1)})\"",
+    "db:migrate:isolated": "node scripts/run-with-isolated-db.mjs -- npx prisma migrate deploy",
     "test:unit": "node --experimental-strip-types --import ./tests/register-alias.mjs --test tests/unit/*.test.mjs",
     "test:integration": "node --experimental-strip-types --import ./tests/register-alias.mjs --test --test-concurrency=1 tests/integration/*.test.mjs",
     "postinstall": "prisma generate"

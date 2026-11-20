@@ -7,7 +7,7 @@ import { randomBytes, scryptSync } from "node:crypto";
 import { writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { PrismaClient } from "@prisma/client";
-import { assertIsolatedTestDatabase } from "../tests/integration/isolation.mjs";
+import { applyIsolatedLocalDatabaseEnv } from "./lib/isolated-local-db.mjs";
 
 /** Same salt:hex format as src/lib/db/local-store.ts hashPassword. */
 function hashPassword(password) {
@@ -20,17 +20,11 @@ function makePassword(label) {
   return `Iso${label}${randomBytes(4).toString("hex")}!A1`;
 }
 
-const identity = assertIsolatedTestDatabase();
-if (identity.host !== "127.0.0.1" && identity.host !== "localhost") {
-  console.error("seed-isolated-auth refused: host is not localhost.");
-  process.exit(1);
-}
-if (String(identity.port) !== "55432") {
-  console.error("seed-isolated-auth refused: expected isolated port 55432.");
-  process.exit(1);
-}
-if (identity.database !== "righ_test") {
-  console.error("seed-isolated-auth refused: expected database righ_test.");
+let identity;
+try {
+  identity = applyIsolatedLocalDatabaseEnv();
+} catch (error) {
+  console.error(error instanceof Error ? error.message : "seed-isolated-auth refused.");
   process.exit(1);
 }
 

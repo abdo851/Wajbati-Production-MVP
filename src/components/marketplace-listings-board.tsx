@@ -146,7 +146,6 @@ export function MarketplaceListingsBoard() {
           onChange={(event) => setQuery(event.target.value)}
           placeholder={t("market.searchPlaceholder")}
           autoComplete="off"
-          suppressHydrationWarning
         />
       </label>
 

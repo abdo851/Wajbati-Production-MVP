@@ -90,10 +90,14 @@ export function cityMatchesFilter(listingCity: string, filterCity: string): bool
 }
 
 export function neighborhoodMatchesListing(
-  listing: { city: string; description?: string; title?: string; category?: string },
+  listing: { city: string; neighborhood?: string; description?: string; title?: string; category?: string },
   neighborhood: string,
 ): boolean {
   if (!neighborhood || neighborhood === "all") return true;
+  const needle = neighborhood.trim().toLowerCase();
+  const stored = (listing.neighborhood || "").trim().toLowerCase();
+  if (stored) return stored === needle || stored.includes(needle);
+  // Legacy fallback only when neighborhood column is empty — not street coverage.
   const hay = `${listing.city} ${listing.title || ""} ${listing.description || ""} ${listing.category || ""}`.toLowerCase();
-  return hay.includes(neighborhood.trim().toLowerCase());
+  return hay.includes(needle);
 }
