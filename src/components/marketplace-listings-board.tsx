@@ -326,7 +326,36 @@ function ListingDetail({
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [authOpen, setAuthOpen] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportReason, setReportReason] = useState("");
+  const [reportBusy, setReportBusy] = useState(false);
+  const [reportNotice, setReportNotice] = useState<string | null>(null);
   const autoStarted = useRef(false);
+
+  async function submitReport() {
+    if (!signedIn || !isCustomer) {
+      setAuthOpen(true);
+      return;
+    }
+    setReportBusy(true);
+    setReportNotice(null);
+    setError(null);
+    try {
+      const response = await fetch("/api/marketplace/reports", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ listingId: listing.id, reason: reportReason }),
+      });
+      await readJson(response);
+      setReportNotice(t("market.reportSent"));
+      setReportReason("");
+      setReportOpen(false);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : t("live.failed"));
+    } finally {
+      setReportBusy(false);
+    }
+  }
 
   async function contactSeller() {
     setBusy(true);
@@ -350,7 +379,7 @@ function ListingDetail({
       });
       await readJson(send);
       setNotice(t("market.contactOpened"));
-      router.push("/messages");
+      router.push(`/inbox?c=${opened.conversation.id}`);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : t("live.failed"));
     } finally {
@@ -423,6 +452,31 @@ function ListingDetail({
             <Link href={`/chef/${listing.chefProfileId}`} className={`${quietButtonClass} w-full`}>
               {t("market.visitStore")}
             </Link>
+            {reportNotice ? <p className="text-sm text-olive">{reportNotice}</p> : null}
+            {reportOpen ? (
+              <div className="space-y-2 rounded-2xl border border-line bg-surface/60 p-3">
+                <label className="block text-sm font-semibold">{t("market.reportReason")}</label>
+                <textarea
+                  className={`${inputClass} min-h-24`}
+                  value={reportReason}
+                  onChange={(event) => setReportReason(event.target.value)}
+                  maxLength={500}
+                  placeholder={t("market.reportPlaceholder")}
+                />
+                <div className="flex flex-wrap gap-2">
+                  <button type="button" className={primaryButtonClass} disabled={reportBusy} onClick={() => void submitReport()}>
+                    {reportBusy ? t("board.loading") : t("market.reportSubmit")}
+                  </button>
+                  <button type="button" className={quietButtonClass} onClick={() => setReportOpen(false)}>
+                    {t("order.close")}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button type="button" className={`${quietButtonClass} w-full`} onClick={() => setReportOpen(true)}>
+                {t("market.reportListing")}
+              </button>
+            )}
           </div>
         </motion.div>
       </motion.div>

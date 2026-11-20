@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState, type FormEvent } from "react";
 import { useI18n } from "@/components/language";
 import { inputClass, primaryButtonClass, quietButtonClass } from "@/components/ui";
@@ -137,6 +138,9 @@ export function MarketplaceSellerPanel({ city }: { city: string }) {
           {accepting ? t("market.setAccepting") : t("market.setNotAccepting")}
         </button>
         <p className="text-xs text-muted">{t("market.online")} · heartbeat</p>
+        <Link href="/inbox" className={quietButtonClass}>
+          {t("market.inbox.title")}
+        </Link>
       </div>
 
       <form onSubmit={onSubmit} className="mt-4 space-y-3">

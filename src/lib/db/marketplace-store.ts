@@ -19,6 +19,7 @@ import type {
   SellerPresence as PrismaPresence,
   AppNotification as PrismaNotification,
   ListingReport as PrismaReport,
+  Prisma,
 } from "@prisma/client";
 import { messageSharesContact } from "@/lib/contact-guard";
 import { getMarketplacePrisma } from "@/lib/db/marketplace-prisma-client";
@@ -228,6 +229,27 @@ async function db() {
   return getMarketplacePrisma();
 }
 
+/** Fixed lock class for seller inquiry gate (PostgreSQL pg_advisory_xact_lock). */
+const SELLER_INQUIRY_LOCK_CLASS = 87201401;
+
+/**
+ * Serialize new-conversation creates with acceptingInquiries toggles for one seller.
+ * Uses PostgreSQL transaction-scoped advisory locks (released on commit/rollback).
+ */
+async function lockSellerInquiryGate(
+  tx: Prisma.TransactionClient,
+  sellerUserId: string,
+): Promise<void> {
+  // PostgreSQL overloads are (int,int) or (bigint). Prisma binds JS numbers as bigint,
+  // so cast explicitly to int4 for the two-key form.
+  await tx.$executeRaw`
+    SELECT pg_advisory_xact_lock(
+      CAST(${SELLER_INQUIRY_LOCK_CLASS} AS INTEGER),
+      hashtext(${sellerUserId})
+    )
+  `;
+}
+
 async function pushNotification(input: {
   userId: string;
   kind: string;
@@ -432,6 +454,14 @@ export const marketplaceStore = {
     const prisma = await db();
     const listing = await prisma.marketplaceListing.findFirst({ where: { id: input.listingId, isDeleted: false } });
     if (!listing) throw new StoreError("Listing not found.", 404);
+    const duplicate = await prisma.listingReport.findFirst({
+      where: {
+        listingId: input.listingId,
+        reporterUserId: input.reporterUserId,
+        status: "open",
+      },
+    });
+    if (duplicate) throw new StoreError("You already reported this listing.", 409);
     const row = await prisma.listingReport.create({
       data: {
         id: randomUUID(),
@@ -448,6 +478,66 @@ export const marketplaceStore = {
     const prisma = await db();
     const rows = await prisma.listingReport.findMany({ where: { status: "open" }, orderBy: { createdAt: "desc" } });
     return rows.map(mapReport);
+  },
+
+  async resolveReport(
+    reportId: string,
+    status: "resolved" | "dismissed",
+  ): Promise<ListingReportRecord> {
+    const prisma = await db();
+    const existing = await prisma.listingReport.findUnique({ where: { id: reportId } });
+    if (!existing) throw new StoreError("Report not found.", 404);
+    if (existing.status !== "open") throw new StoreError("Report is already closed.", 409);
+    const row = await prisma.listingReport.update({
+      where: { id: reportId },
+      data: { status },
+    });
+    return mapReport(row);
+  },
+
+  /**
+   * Public Marketplace listings from chefs the buyer follows.
+   * Follow.chefId stores the seller userId (not ChefProfile.id).
+   */
+  async listFollowedPublicListings(customerId: string): Promise<PublicMarketplaceListing[]> {
+    const prisma = await db();
+    const follows = await prisma.follow.findMany({
+      where: { customerId },
+      select: { chefId: true },
+      take: 200,
+    });
+    const sellerUserIds = [...new Set(follows.map((row) => row.chefId))];
+    if (sellerUserIds.length === 0) return [];
+
+    const rows = await prisma.marketplaceListing.findMany({
+      where: {
+        sellerUserId: { in: sellerUserIds },
+        isDeleted: false,
+        isActive: true,
+        isPublished: true,
+        moderationStatus: "APPROVED",
+      },
+      orderBy: { updatedAt: "desc" },
+      take: 120,
+    });
+    const mapped = rows.map(mapListing).filter((row) => listingIsPubliclyActive(row));
+    const profiles = await prisma.chefProfile.findMany({
+      where: { userId: { in: sellerUserIds } },
+      select: { userId: true, kitchenName: true },
+    });
+    const kitchenBySeller = new Map(profiles.map((row) => [row.userId, row.kitchenName || ""]));
+    const presenceRows = await prisma.sellerPresence.findMany({
+      where: { sellerUserId: { in: sellerUserIds } },
+    });
+    const presenceBySeller = new Map(presenceRows.map((row) => [row.sellerUserId, mapPresence(row)]));
+    return mapped.map((listing) => {
+      const presence = presenceBySeller.get(listing.sellerUserId);
+      return toPublicListing(listing, {
+        kitchenName: kitchenBySeller.get(listing.sellerUserId) || undefined,
+        sellerOnline: sellerIsOnline(presence),
+        sellerAcceptingInquiries: presence ? presence.acceptingInquiries !== false : true,
+      });
+    });
   },
 
   async listPendingModeration(): Promise<MarketplaceListingRecord[]> {
@@ -467,18 +557,39 @@ export const marketplaceStore = {
     const now = new Date();
     const accepting =
       typeof options?.acceptingInquiries === "boolean" ? options.acceptingInquiries : undefined;
+    // When toggling inquiry availability, take the same seller advisory lock used by
+    // openOrCreateConversation so concurrent creates cannot race past a disable.
+    if (accepting !== undefined) {
+      const row = await prisma.$transaction(async (tx) => {
+        await lockSellerInquiryGate(tx, sellerUserId);
+        return tx.sellerPresence.upsert({
+          where: { sellerUserId },
+          create: {
+            sellerUserId,
+            lastSeenAt: now,
+            acceptingInquiries: accepting,
+            updatedAt: now,
+          },
+          update: {
+            lastSeenAt: now,
+            updatedAt: now,
+            acceptingInquiries: accepting,
+          },
+        });
+      });
+      return mapPresence(row);
+    }
     const row = await prisma.sellerPresence.upsert({
       where: { sellerUserId },
       create: {
         sellerUserId,
         lastSeenAt: now,
-        acceptingInquiries: accepting ?? true,
+        acceptingInquiries: true,
         updatedAt: now,
       },
       update: {
         lastSeenAt: now,
         updatedAt: now,
-        ...(accepting === undefined ? {} : { acceptingInquiries: accepting }),
       },
     });
     return mapPresence(row);
@@ -505,6 +616,7 @@ export const marketplaceStore = {
       throw new StoreError("You cannot message yourself.", 400);
     }
     const prisma = await db();
+    // Existing conversations are always allowed (replies / reopen) — no inquiry gate.
     const existing = await prisma.marketplaceConversation.findUnique({
       where: {
         buyerUserId_sellerUserId: {
@@ -523,18 +635,73 @@ export const marketplaceStore = {
       }
       return mapConversation(existing);
     }
-    const now = new Date();
-    const created = await prisma.marketplaceConversation.create({
-      data: {
-        id: randomUUID(),
-        buyerUserId: input.buyerUserId,
-        sellerUserId: input.sellerUserId,
-        listingId: input.listingId ?? null,
-        createdAt: now,
-        updatedAt: now,
-      },
+
+    // New conversation: PostgreSQL transaction-scoped advisory lock serializes creates
+    // for this seller with acceptingInquiries toggles (see heartbeat).
+    return prisma.$transaction(async (tx) => {
+      await lockSellerInquiryGate(tx, input.sellerUserId);
+
+      const again = await tx.marketplaceConversation.findUnique({
+        where: {
+          buyerUserId_sellerUserId: {
+            buyerUserId: input.buyerUserId,
+            sellerUserId: input.sellerUserId,
+          },
+        },
+      });
+      if (again) {
+        if (input.listingId && !again.listingId) {
+          const updated = await tx.marketplaceConversation.update({
+            where: { id: again.id },
+            data: { listingId: input.listingId, updatedAt: new Date() },
+          });
+          return mapConversation(updated);
+        }
+        return mapConversation(again);
+      }
+
+      const sellerProfile = await tx.chefProfile.findFirst({
+        where: { userId: input.sellerUserId, isActive: true },
+        select: { id: true },
+      });
+      if (!sellerProfile) {
+        const listed = await tx.marketplaceListing.findFirst({
+          where: { sellerUserId: input.sellerUserId, isDeleted: false },
+          select: { id: true },
+        });
+        if (!listed) throw new StoreError("Seller not found.", 404);
+      }
+
+      if (input.listingId) {
+        const listing = await tx.marketplaceListing.findFirst({
+          where: { id: input.listingId, isDeleted: false },
+          select: { sellerUserId: true },
+        });
+        if (!listing || listing.sellerUserId !== input.sellerUserId) {
+          throw new StoreError("Listing not found.", 404);
+        }
+      }
+
+      const presence = await tx.sellerPresence.findUnique({
+        where: { sellerUserId: input.sellerUserId },
+      });
+      if (presence && presence.acceptingInquiries === false) {
+        throw new StoreError("This seller is not accepting new inquiries right now.", 403);
+      }
+
+      const now = new Date();
+      const created = await tx.marketplaceConversation.create({
+        data: {
+          id: randomUUID(),
+          buyerUserId: input.buyerUserId,
+          sellerUserId: input.sellerUserId,
+          listingId: input.listingId ?? null,
+          createdAt: now,
+          updatedAt: now,
+        },
+      });
+      return mapConversation(created);
     });
-    return mapConversation(created);
   },
 
   async listConversationsFor(userId: string): Promise<MarketplaceConversationRecord[]> {
@@ -602,7 +769,7 @@ export const marketplaceStore = {
       kind: "marketplace.message",
       title: "New marketplace message",
       body: body.slice(0, 120),
-      href: "/messages",
+      href: `/inbox?c=${conversation.id}`,
       dedupeKey: `msg:${conversation.id}:${Math.floor(Date.now() / (5 * 60 * 1000))}`,
     });
     return { conversation: mapConversation(updated), message: mapMessage(message) };

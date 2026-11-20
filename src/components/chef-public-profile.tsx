@@ -122,7 +122,7 @@ export function ChefPublicProfile({ initial }: { initial: PublicChefProfile }) {
           body: t("market.contactFirstMessage", { title: title || profile.kitchenName }),
         }),
       }).then((response) => readJson(response));
-      router.push("/messages");
+      router.push(`/inbox?c=${opened.conversation.id}`);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : t("err.generic"));
     } finally {
@@ -398,7 +398,7 @@ function StoreListingDetail({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ body: t(messageKey, { title: listing.title }) }),
       }).then((response) => readJson(response));
-      router.push("/messages");
+      router.push(`/inbox?c=${opened.conversation.id}`);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : t("err.generic"));
     } finally {

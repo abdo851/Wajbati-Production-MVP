@@ -91,6 +91,11 @@ const exact: Record<string, MessageKey> = {
   "That conversation could not be found.": "err.threadMissing",
   "Your wallet balance is empty. Top it up before publishing or accepting orders.": "err.walletEmpty",
   "Phone numbers, emails, and links are not allowed in chat.": "err.chatBlocked",
+  "This seller is not accepting new inquiries right now.": "market.sellerNotAccepting",
+  "You already reported this listing.": "market.reportDuplicate",
+  "Seller not found.": "err.accountMissing",
+  "Report not found.": "err.request",
+  "Report is already closed.": "err.request",
   "Request failed.": "err.request",
   "The server returned an unreadable response.": "err.unreadable",
 };

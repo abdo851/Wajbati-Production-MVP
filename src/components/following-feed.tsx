@@ -9,6 +9,7 @@ import { useSession } from "@/components/use-session";
 import { inputClass, primaryButtonClass } from "@/components/ui";
 import { formatMad, formatServiceDate } from "@/lib/format";
 import type { Lang, MessageKey } from "@/lib/i18n";
+import type { PublicMarketplaceListing } from "@/lib/marketplace/types";
 import { readJson } from "@/lib/read-json";
 import type { MealListResponse } from "@/lib/types";
 
@@ -20,11 +21,16 @@ type LookupState =
   | { kind: "ready"; board: MealListResponse }
   | { kind: "error"; message: string };
 
+type MarketplaceFollowResponse = { listings: PublicMarketplaceListing[] };
+
 export function FollowingFeed() {
   const { t, lang } = useI18n();
   const { session, error: sessionError } = useSession();
   const signedIn = Boolean(session?.user && session.user.role === "customer");
-  const live = useLiveQuery<MealListResponse>(signedIn ? "/api/following/meals" : null, 8000);
+  const liveMarket = useLiveQuery<MarketplaceFollowResponse>(
+    signedIn ? "/api/marketplace/following" : null,
+    8000,
+  );
 
   const [email, setEmail] = useState("");
   const [lookup, setLookup] = useState<LookupState>({ kind: "idle" });
@@ -72,7 +78,15 @@ export function FollowingFeed() {
   }
 
   if (signedIn) {
-    return <FeedView board={live.data} loading={live.loading && !live.data} error={live.error} lang={lang} t={t} />;
+    return (
+      <MarketplaceFollowView
+        listings={liveMarket.data?.listings ?? null}
+        loading={liveMarket.loading && !liveMarket.data}
+        error={liveMarket.error}
+        lang={lang}
+        t={t}
+      />
+    );
   }
 
   return (
@@ -113,14 +127,80 @@ export function FollowingFeed() {
 
       {lookup.kind === "ready" ? (
         <div className="mt-10">
-          <FeedView board={lookup.board} loading={false} error={null} lang={lang} t={t} />
+          <LegacyMealFeedView board={lookup.board} loading={false} error={null} lang={lang} t={t} />
         </div>
       ) : null}
     </div>
   );
 }
 
-function FeedView({
+function MarketplaceFollowView({
+  listings,
+  loading,
+  error,
+  lang,
+  t,
+}: {
+  listings: PublicMarketplaceListing[] | null;
+  loading: boolean;
+  error: string | null;
+  lang: Lang;
+  t: (key: MessageKey) => string;
+}) {
+  const items = listings ?? [];
+  return (
+    <div>
+      <h2 className="mt-6 font-display text-2xl">{t("following.marketTitle")}</h2>
+      <p className="mt-2 text-sm text-muted">{t("following.marketHint")}</p>
+      {error ? <p className="mt-6 text-base text-terracotta-deep">{error}</p> : null}
+      {loading ? <p className="mt-6 text-base text-muted">{t("board.loading")}</p> : null}
+      {!loading && !error && listings && items.length === 0 ? (
+        <p className="lift-card mt-6 rounded-3xl px-5 py-10 text-center text-base text-muted">{t("following.marketEmpty")}</p>
+      ) : null}
+      <ul className="mt-6 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4">
+        {items.map((listing, index) => (
+          <motion.li
+            key={listing.id}
+            initial={{ opacity: 0, y: 22 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, delay: Math.min(index * 0.05, 0.35), ease: [0.22, 1, 0.36, 1] }}
+            className="group overflow-hidden rounded-3xl border border-line bg-card shadow-lux transition-shadow duration-300 hover:shadow-lux-lg"
+          >
+            <Link href={`/chef/${listing.chefProfileId}`} className="block">
+              <div className="relative aspect-square overflow-hidden bg-surface">
+                {listing.images[0] ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={listing.images[0]}
+                    alt=""
+                    loading="lazy"
+                    className="h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-[1.06]"
+                  />
+                ) : (
+                  <span className="flex h-full items-center justify-center text-sm text-muted/60">{t("market.photoSoon")}</span>
+                )}
+              </div>
+              <div className="space-y-1 p-3">
+                <p className="line-clamp-2 min-h-10 text-sm font-semibold">{listing.title}</p>
+                <p className="truncate text-xs font-semibold text-gold-deep">{listing.kitchenName || t("market.visitStore")}</p>
+                <p className="text-sm font-bold">
+                  {listing.priceMode === "fixed" && listing.priceMad != null
+                    ? formatMad(listing.priceMad, lang)
+                    : listing.priceMode === "negotiable"
+                      ? t("market.price.negotiable")
+                      : t("market.price.hidden")}
+                </p>
+              </div>
+            </Link>
+          </motion.li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/** Legacy email-lookup path — meals only; not presented as Marketplace listings. */
+function LegacyMealFeedView({
   board,
   loading,
   error,

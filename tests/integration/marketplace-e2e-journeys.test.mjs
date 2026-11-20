@@ -352,6 +352,78 @@ describe("marketplace E2E journeys (isolated postgres)", () => {
     assert.ok(Array.isArray(suggestions));
   });
 
+  it("5B-1: acceptingInquiries blocks new conversations but allows existing replies", async () => {
+    await store.heartbeat(SELLER.userId, { acceptingInquiries: false });
+    const freshBuyer = "e2e-buyer-inquiries-off";
+    await prisma.marketplaceConversation.deleteMany({
+      where: { buyerUserId: freshBuyer, sellerUserId: SELLER.userId },
+    });
+    await assert.rejects(
+      () =>
+        store.openOrCreateConversation({
+          buyerUserId: freshBuyer,
+          sellerUserId: SELLER.userId,
+        }),
+      /not accepting new inquiries/i,
+    );
+
+    // Existing conversation (from TASK3/4) must still open and accept replies.
+    const existing = await prisma.marketplaceConversation.findFirst({
+      where: { buyerUserId: BUYER.userId, sellerUserId: SELLER.userId },
+    });
+    assert.ok(existing);
+    const reopened = await store.openOrCreateConversation({
+      buyerUserId: BUYER.userId,
+      sellerUserId: SELLER.userId,
+    });
+    assert.equal(reopened.id, existing.id);
+    const reply = await store.sendMessage({
+      conversationId: existing.id,
+      senderUserId: BUYER.userId,
+      body: "Follow-up while inquiries are paused.",
+    });
+    assert.ok(reply.message.id);
+    const notes = await store.listNotifications(SELLER.userId);
+    const msgNote = notes.find((n) => n.kind === "marketplace.message" && n.href?.includes(existing.id));
+    assert.ok(msgNote);
+    assert.match(msgNote.href || "", new RegExp(`/inbox\\?c=${existing.id}`));
+
+    await store.heartbeat(SELLER.userId, { acceptingInquiries: true });
+    const created = await store.openOrCreateConversation({
+      buyerUserId: freshBuyer,
+      sellerUserId: SELLER.userId,
+    });
+    assert.ok(created.id);
+  });
+
+  it("5B-1: report resolve/dismiss and duplicate open reports", async () => {
+    const listing = await prisma.marketplaceListing.findFirst({
+      where: { sellerUserId: SELLER.userId, isPublished: true },
+    });
+    assert.ok(listing);
+    await prisma.listingReport.deleteMany({
+      where: { listingId: listing.id, reporterUserId: BUYER.userId },
+    });
+    const report = await store.reportListing({
+      listingId: listing.id,
+      reporterUserId: BUYER.userId,
+      reason: "5B-1 duplicate and resolve verification report.",
+    });
+    await assert.rejects(
+      () =>
+        store.reportListing({
+          listingId: listing.id,
+          reporterUserId: BUYER.userId,
+          reason: "Second open report should be rejected.",
+        }),
+      /already reported/i,
+    );
+    const resolved = await store.resolveReport(report.id, "resolved");
+    assert.equal(resolved.status, "resolved");
+    const open = await store.listOpenReports();
+    assert.equal(open.some((row) => row.id === report.id), false);
+  });
+
   it("TASK7: admin moderation and unauthorized ownership checks", async () => {
     const pending = await store.createListing({
       chefProfileId: SELLER.chefProfileId,

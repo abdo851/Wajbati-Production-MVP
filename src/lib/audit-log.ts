@@ -11,7 +11,8 @@ export type AuditAction =
   | "order.admin_resolve"
   | "settings.commission"
   | "admin.account_update"
-  | "listing.moderation";
+  | "listing.moderation"
+  | "listing.report";
 
 export type AuditEntry = {
   actorId: string;

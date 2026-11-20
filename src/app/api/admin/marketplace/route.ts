@@ -28,8 +28,25 @@ export async function PATCH(request: Request) {
     }
     const current = await requireDesk("admin");
     const body = (await readBody(request)) as Record<string, unknown>;
-    const listingId = typeof body.listingId === "string" ? body.listingId.trim() : "";
     const action = typeof body.action === "string" ? body.action : "";
+    const reportId = typeof body.reportId === "string" ? body.reportId.trim() : "";
+
+    if (reportId) {
+      const status = action === "resolve" ? "resolved" : action === "dismiss" ? "dismissed" : null;
+      if (!status) throw new StoreError("Unknown report action.", 400);
+      const report = await marketplaceStore.resolveReport(reportId, status);
+      await recordAdminAudit({
+        actorId: current.user.id,
+        actorEmail: current.user.email,
+        action: "listing.report",
+        entityType: "ListingReport",
+        entityId: reportId,
+        metadata: { status, listingId: report.listingId },
+      });
+      return NextResponse.json({ report });
+    }
+
+    const listingId = typeof body.listingId === "string" ? body.listingId.trim() : "";
     if (!listingId) throw new StoreError("Listing is required.", 400);
     const status =
       action === "approve" ? "approved" : action === "reject" ? "rejected" : action === "hide" ? "hidden" : null;

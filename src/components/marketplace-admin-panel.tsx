@@ -20,7 +20,10 @@ export function MarketplaceAdminPanel() {
   }
 
   useEffect(() => {
-    void reload().catch((caught) => setError(caught instanceof Error ? caught.message : "error"));
+    const timer = window.setTimeout(() => {
+      void reload().catch((caught) => setError(caught instanceof Error ? caught.message : "error"));
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, []);
 
   async function moderate(listingId: string, action: "approve" | "hide" | "reject") {
@@ -30,6 +33,21 @@ export function MarketplaceAdminPanel() {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ listingId, action }),
+      });
+      await readJson(response);
+      await reload();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "error");
+    }
+  }
+
+  async function resolveReport(reportId: string, action: "resolve" | "dismiss") {
+    setError(null);
+    try {
+      const response = await fetch("/api/admin/marketplace", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reportId, action }),
       });
       await readJson(response);
       await reload();
@@ -77,8 +95,19 @@ export function MarketplaceAdminPanel() {
         <ul className="mt-2 space-y-2">
           {reports.map((report) => (
             <li key={report.id} className="rounded-2xl border border-line p-3 text-sm">
-              <p className="font-medium">{report.listingId}</p>
+              <p className="font-medium">{t("admin.marketReportListing")}: {report.listingId}</p>
               <p className="mt-1 text-muted">{report.reason}</p>
+              <p className="mt-1 text-xs text-muted" dir="ltr">
+                {report.reporterUserId} · {new Date(report.createdAt).toLocaleString()}
+              </p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <button type="button" className={primaryButtonClass} onClick={() => void resolveReport(report.id, "resolve")}>
+                  {t("admin.marketReportResolve")}
+                </button>
+                <button type="button" className={quietButtonClass} onClick={() => void resolveReport(report.id, "dismiss")}>
+                  {t("admin.marketReportDismiss")}
+                </button>
+              </div>
             </li>
           ))}
         </ul>
