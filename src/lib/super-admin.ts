@@ -72,6 +72,11 @@ export const ADMIN_AUTH_BYPASSED =
   process.env.RIGH_ALLOW_ADMIN_BYPASS === "1" &&
   !databaseLooksSharedOrProduction();
 
+/** True when the email is on the admin allowlist (role is not checked). */
+export function isAllowlistedAdminEmail(email: string | null | undefined): boolean {
+  return Boolean(email && SUPER_ADMIN_EMAILS.includes(email.toLowerCase()));
+}
+
 export function isSuperAdmin(user: Pick<AuthUser, "email" | "role"> | null | undefined): boolean {
-  return Boolean(user && user.role === "admin" && SUPER_ADMIN_EMAILS.includes(user.email.toLowerCase()));
+  return Boolean(user && user.role === "admin" && isAllowlistedAdminEmail(user.email));
 }

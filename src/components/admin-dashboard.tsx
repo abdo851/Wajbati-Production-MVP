@@ -5,6 +5,7 @@ import toast from "react-hot-toast";
 import { AdminChat } from "@/components/chat-panel";
 import { AdminSettings } from "@/components/admin-settings";
 import { LoginCard } from "@/components/login-card";
+import { MarketplaceAdminPanel } from "@/components/marketplace-admin-panel";
 import { ReviewModal, type ReviewView } from "@/components/review-modal";
 import { useI18n } from "@/components/language";
 import { LiveDot, inputClass, primaryButtonClass, quietButtonClass, StatusPill } from "@/components/ui";
@@ -39,12 +40,15 @@ export function AdminDashboard() {
 function Desk({ name, onLogout }: { name: string; onLogout: () => Promise<void> }) {
   const { t } = useI18n();
   const { data, error, loading, reconnecting, reload } = useLiveQuery<AdminOverview>("/api/admin/overview");
-  const [tab, setTab] = useState<"orders" | "chefs" | "drivers" | "history" | "emails" | "messages" | "users" | "settings">("orders");
+  const [tab, setTab] = useState<
+    "orders" | "chefs" | "market" | "drivers" | "history" | "emails" | "messages" | "users" | "settings"
+  >("orders");
   const [range, setRange] = useState<DateRange>("all");
   const [refreshKey, setRefreshKey] = useState(0);
   const tabs = [
     ["orders", t("admin.tabOrders")],
     ["chefs", t("admin.tabChefs")],
+    ["market", t("admin.marketTitle")],
     ["drivers", t("admin.tabDrivers")],
     ["history", t("admin.tabHistory")],
     ["users", t("admin.tabUsers")],
@@ -260,6 +264,7 @@ function Desk({ name, onLogout }: { name: string; onLogout: () => Promise<void> 
         </>
       ) : null}
       {tab === "chefs" ? <div className="mt-8"><PendingChefs refreshKey={refreshKey} range={range} onToast={notify} /></div> : null}
+      {tab === "market" ? <div className="mt-8"><MarketplaceAdminPanel /></div> : null}
       {tab === "drivers" && data ? <DriverDesk drivers={data.drivers} range={range} onChanged={() => void reload()} onToast={notify} /> : null}
       {tab === "history" && data ? <HistoryDesk refreshKey={refreshKey} drivers={data.drivers} range={range} onChanged={() => void reload()} onToast={notify} /> : null}
       {tab === "users" ? <AllUsers /> : null}

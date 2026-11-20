@@ -10,7 +10,8 @@ export type AuditAction =
   | "driver.deactivate"
   | "order.admin_resolve"
   | "settings.commission"
-  | "admin.account_update";
+  | "admin.account_update"
+  | "listing.moderation";
 
 export type AuditEntry = {
   actorId: string;

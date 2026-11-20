@@ -2,7 +2,7 @@
 
 import { useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { CustomerOrders } from "@/components/customer-orders";
 import { PasswordField } from "@/components/password-field";
 import { ProfileExtras } from "@/components/profile-extras";
@@ -10,13 +10,17 @@ import { useI18n } from "@/components/language";
 import { useSession } from "@/components/use-session";
 import { inputClass, primaryButtonClass, quietButtonClass } from "@/components/ui";
 import { writeCheckout } from "@/lib/guest";
+import { peekMarketplaceIntent, safeReturnPath } from "@/lib/marketplace-intent";
 import { readJson } from "@/lib/read-json";
 
 export function AccountPanel() {
   const { t } = useI18n();
   const { session, reload } = useSession();
   const router = useRouter();
-  const [mode, setMode] = useState<"signin" | "create">("signin");
+  const searchParams = useSearchParams();
+  const nextPath = safeReturnPath(searchParams.get("next"), "/");
+  const modeParam = searchParams.get("mode");
+  const [mode, setMode] = useState<"signin" | "create">(modeParam === "create" ? "create" : "signin");
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
@@ -42,6 +46,12 @@ export function AccountPanel() {
           : null;
 
   useEffect(() => {
+    if (modeParam === "create" || modeParam === "signin") {
+      setMode(modeParam);
+    }
+  }, [modeParam]);
+
+  useEffect(() => {
     if (!deskHref) return;
     router.replace(deskHref);
   }, [deskHref, router]);
@@ -55,6 +65,13 @@ export function AccountPanel() {
     }, 0);
     return () => window.clearTimeout(timeout);
   }, [session]);
+
+  function continueAfterAuth() {
+    const intent = peekMarketplaceIntent();
+    const destination = safeReturnPath(intent?.returnPath || nextPath, "/");
+    router.push(destination);
+    router.refresh();
+  }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -73,7 +90,7 @@ export function AccountPanel() {
       await readJson(response);
       if (creating) writeCheckout({ name: fullName, phone, address: "" });
       await reload();
-      router.refresh();
+      continueAfterAuth();
     } catch (caught) {
       const message = caught instanceof Error ? caught.message : "";
       setError(message === "Those credentials were not recognized." ? t("auth.invalid") : message || t("order.failed"));

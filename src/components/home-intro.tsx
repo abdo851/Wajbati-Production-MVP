@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { motion, type Variants } from "framer-motion";
 import { useI18n } from "@/components/language";
 import { marketplaceVisibility } from "@/lib/marketplace-visibility";
@@ -22,6 +23,12 @@ const item: Variants = {
 export function HomeIntro() {
   const { t } = useI18n();
   const legacyFleet = marketplaceVisibility.showCustomerDeliveryFleetMarketing;
+  // Framer Motion `initial="hidden"` applies opacity/transform on SSR that the
+  // client first paint does not match — defer animation until after mount.
+  const [motionReady, setMotionReady] = useState(false);
+  useEffect(() => {
+    setMotionReady(true);
+  }, []);
 
   return (
     <section className="relative isolate overflow-hidden border-b border-line/70">
@@ -39,8 +46,8 @@ export function HomeIntro() {
       />
       <motion.div
         variants={container}
-        initial="hidden"
-        animate="show"
+        initial={false}
+        animate={motionReady ? "show" : false}
         className="mx-auto flex max-w-6xl flex-col justify-end gap-4 px-4 pb-7 pt-8 sm:gap-5 sm:px-6 sm:pb-9 sm:pt-10"
       >
         <motion.p
@@ -63,8 +70,14 @@ export function HomeIntro() {
         </motion.p>
         <motion.div variants={item} className="flex flex-wrap items-center gap-3">
           <a
-            href="#meals"
+            href="#marketplace-listings"
             className="inline-flex min-h-11 items-center justify-center rounded-full bg-brand px-5 text-sm font-semibold text-white shadow-[0_12px_24px_-14px_rgba(111,20,32,0.65)] transition duration-200 hover:bg-brand-deep active:scale-[0.98]"
+          >
+            {t("home.ctaMarket")}
+          </a>
+          <a
+            href="#meals"
+            className="inline-flex min-h-11 items-center justify-center rounded-full border border-line bg-card px-5 text-sm font-semibold text-ink transition duration-200 hover:border-brand/35"
           >
             {t("home.ctaMeals")}
           </a>

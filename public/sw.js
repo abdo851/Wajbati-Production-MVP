@@ -1,5 +1,8 @@
 /* Wajbati service worker: silent auto-update (skipWaiting + clients.claim),
-   static-asset caching, and network-first for pages/APIs. */
+   static-asset caching, and network-first for pages/APIs.
+   Web Push is intentionally NOT enabled here — requires VAPID keys and a
+   configured push provider. Do not claim background delivery on iOS/Android
+   until those credentials exist and device support is verified. */
 const CACHE = "wajbati-static-v1";
 
 self.addEventListener("install", (event) => {

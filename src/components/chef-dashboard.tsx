@@ -10,6 +10,7 @@ import { cityCenter, type LatLng } from "@/lib/geo";
 const DispatchMapDialog = dynamic(() => import("@/components/dispatch-map-dialog").then((mod) => mod.DispatchMapDialog), { ssr: false });
 import { PhotoGallery, PenButton } from "@/components/photo-gallery";
 import { ProfilePhoto } from "@/components/site-header";
+import { MarketplaceSellerPanel } from "@/components/marketplace-seller-panel";
 import { SecureChat, SecureInbox } from "@/components/secure-chat";
 import { WalletPanel } from "@/components/wallet-panel";
 import { inputClass, LiveDot, primaryButtonClass, quietButtonClass, StatusPill } from "@/components/ui";
@@ -315,6 +316,8 @@ function Kitchen({
         <WalletPanel />
         </div>
       </section>
+
+      <MarketplaceSellerPanel city={city ?? ""} />
 
       <section className="mt-8 rounded-3xl border border-line bg-card p-5 shadow-lux">
         <div className="mb-4 flex items-center gap-3">

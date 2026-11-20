@@ -26,6 +26,7 @@ import { documentsAreReady, extensionFor, requiredChefDocuments, requiredDocumen
 import { DEMO_ACCOUNTS } from "@/lib/demo-accounts";
 import { DRIVER_DEMOS } from "@/lib/driver-demos";
 import { LoginFailure, StoreError } from "@/lib/errors";
+import { isAllowlistedAdminEmail } from "@/lib/super-admin";
 import { removePrivateFile, writePrivateFile, readPrivateFile } from "@/lib/private-files";
 import { messageSharesContact } from "@/lib/contact-guard";
 import {
@@ -622,14 +623,16 @@ function normalize(db: Database): boolean {
       changed = true;
     }
   }
+  // Keep every allowlisted admin email as admin; demote only unknown admin emails.
+  // (Previously a single SUPER_ADMIN_EMAIL master demoted admin@wajbati.ma and broke desk sessions.)
+  for (const profile of db.profiles) {
+    if (profile.role === "admin" && !isAllowlistedAdminEmail(profile.email)) {
+      profile.role = "customer";
+      changed = true;
+    }
+  }
   const master = DEMO_ACCOUNTS.find((account) => account.role === "admin");
   if (master) {
-    for (const profile of db.profiles) {
-      if (profile.role === "admin" && profile.email.toLowerCase() !== master.email.toLowerCase()) {
-        profile.role = "customer";
-        changed = true;
-      }
-    }
     const profile = db.profiles.find((item) => item.email.toLowerCase() === master.email.toLowerCase());
     if (profile) {
       if (profile.role !== "admin") {

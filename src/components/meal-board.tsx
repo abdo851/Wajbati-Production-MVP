@@ -19,7 +19,7 @@ import { marketplaceVisibility } from "@/lib/marketplace-visibility";
 const LocationPicker = dynamic(() => import("@/components/location-picker").then((mod) => mod.LocationPicker), { ssr: false });
 
 export function MealBoard() {
-  const { data, error, loading, reload } = useLiveQuery<MealListResponse>("/api/meals");
+  const { data, error, loading, reload } = useLiveQuery<MealListResponse>("/api/meals", 30_000);
   const { t, lang } = useI18n();
   const [selected, setSelected] = useState<PublicMeal | null>(null);
   const [range, setRange] = useState<"today" | "yesterday" | "recent">("today");

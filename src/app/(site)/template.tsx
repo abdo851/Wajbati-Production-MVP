@@ -1,16 +1,12 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { motion } from "framer-motion";
 
+/**
+ * Keep this free of module-level mutable state and enter animations.
+ * Module state / remount animations were amplifying Fast Refresh into a
+ * visible full-page reload loop during local development.
+ */
 export default function SiteTemplate({ children }: { children: ReactNode }) {
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-    >
-      {children}
-    </motion.div>
-  );
+  return <div>{children}</div>;
 }

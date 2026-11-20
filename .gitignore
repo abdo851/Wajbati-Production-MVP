@@ -50,6 +50,7 @@ next-env.d.ts
 !.env.example
 
 data/store.json
+data/marketplace-store.json
 data/private-docs/
 .env
 .env.local

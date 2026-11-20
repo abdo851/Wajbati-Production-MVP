@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { AccountPanel } from "@/components/account-panel";
 import { BackButton } from "@/components/back-button";
 
@@ -10,7 +11,9 @@ export default function AccountPage() {
   return (
     <>
       <BackButton />
-      <AccountPanel />
+      <Suspense fallback={<main className="mx-auto w-full max-w-lg flex-1 px-4 py-8 sm:px-6 sm:py-10" />}>
+        <AccountPanel />
+      </Suspense>
     </>
   );
 }

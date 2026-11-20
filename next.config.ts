@@ -7,6 +7,9 @@ const nextConfig: NextConfig = {
   ...(process.env.NODE_ENV === "production"
     ? { cacheComponents: true, partialPrefetching: true }
     : {}),
+  // Cursor/browser often opens http://127.0.0.1 while `next dev` advertises
+  // localhost — blocked HMR then falls back to full page reloads in a loop.
+  allowedDevOrigins: ["127.0.0.1", "localhost"],
   serverExternalPackages: ["@prisma/client", "prisma"],
   turbopack: {
     rules: {
