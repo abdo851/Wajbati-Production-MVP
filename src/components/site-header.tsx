@@ -14,8 +14,8 @@ function Mark() {
     <svg viewBox="0 0 40 40" className="size-9 drop-shadow-[0_6px_18px_rgba(169,127,44,0.35)]" aria-hidden="true">
       <defs>
         <linearGradient id={gradientId} x1="0" y1="0" x2="40" y2="40" gradientUnits="userSpaceOnUse">
-          <stop offset="0" stopColor="#DDB964" />
-          <stop offset="1" stopColor="#A97F2C" />
+          <stop offset="0" stopColor="#B8253A" />
+          <stop offset="1" stopColor="#6F1420" />
         </linearGradient>
       </defs>
       <rect width="40" height="40" rx="14" fill={`url(#${gradientId})`} />
@@ -56,7 +56,7 @@ function MenuButton({
   return (
     <button
       type="button"
-      className={`inline-flex size-10 shrink-0 items-center justify-center rounded-full border border-line bg-card/85 text-foreground transition duration-200 hover:border-gold/60 hover:bg-gold/5 ${
+      className={`inline-flex size-10 shrink-0 items-center justify-center rounded-full border border-line bg-card/85 text-foreground transition duration-200 hover:border-brand/40 hover:bg-brand/[0.04] ${
         visuallyHidden ? "invisible pointer-events-none" : ""
       }`}
       aria-expanded={open}

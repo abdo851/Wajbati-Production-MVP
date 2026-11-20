@@ -1,25 +1,36 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { motion, useReducedMotion } from "framer-motion";
 import { useI18n } from "@/components/language";
 import { useSession } from "@/components/use-session";
+import { marketplaceVisibility } from "@/lib/marketplace-visibility";
 
 export function BottomNav() {
   const pathname = usePathname();
   const { t } = useI18n();
   const { session } = useSession();
   const reduceMotion = useReducedMotion();
+  // Defer framer-motion active pill until after mount so SSR HTML matches
+  // the first client paint (useReducedMotion / layoutId otherwise hydrate-mismatch).
+  const [motionReady, setMotionReady] = useState(false);
+  useEffect(() => {
+    setMotionReady(true);
+  }, []);
   if (pathname.startsWith("/admin") || pathname.startsWith("/driver")) return null;
 
   const role = session?.user?.role;
   const accountHref =
     role === "chef" ? "/chef" : role === "driver" ? "/driver/dashboard" : role === "admin" ? "/admin" : "/account";
+  const showOrders = marketplaceVisibility.showCustomerMealOrderFlow;
 
   const items = [
     { href: "/", label: t("nav.home"), icon: HomeIcon, match: "exact" as const },
-    { href: "/orders", label: t("nav.orders"), icon: OrdersIcon, match: "prefix" as const },
+    ...(showOrders
+      ? [{ href: "/orders", label: t("nav.orders"), icon: OrdersIcon, match: "prefix" as const }]
+      : []),
     { href: "/following", label: t("nav.following"), icon: HeartIcon, match: "prefix" as const },
     { href: accountHref, label: t("nav.account"), icon: UserIcon, match: "account" as const },
   ] as const;
@@ -43,10 +54,13 @@ export function BottomNav() {
                 : pathname === item.href || pathname.startsWith(`${item.href}/`);
           return (
             <li key={`${item.href}-${item.label}`} className="relative flex-1">
-              {active ? (
+              {active && !motionReady ? (
+                <span className="absolute inset-x-1 inset-y-0 rounded-2xl bg-brand/12" aria-hidden="true" />
+              ) : null}
+              {active && motionReady ? (
                 <motion.span
                   layoutId="bottom-nav-active-pill"
-                  className="absolute inset-x-1 inset-y-0 rounded-2xl bg-gold/14"
+                  className="absolute inset-x-1 inset-y-0 rounded-2xl bg-brand/12"
                   transition={
                     reduceMotion
                       ? { duration: 0 }

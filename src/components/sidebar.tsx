@@ -6,6 +6,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { useI18n } from "@/components/language";
 import { ProfilePhoto } from "@/components/site-header";
 import { useSession } from "@/components/use-session";
+import { marketplaceVisibility } from "@/lib/marketplace-visibility";
 
 const NOTICE_KEY = "wajbati_notifications";
 
@@ -122,9 +123,11 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
                     <Link href="/chef" className={nestedClass} onClick={onClose}>
                       {t("sidebar.chef")}
                     </Link>
-                    <Link href="/driver" className={nestedClass} onClick={onClose}>
-                      {t("sidebar.driver")}
-                    </Link>
+                    {marketplaceVisibility.showCustomerDriverRecruitment ? (
+                      <Link href="/driver" className={nestedClass} onClick={onClose}>
+                        {t("sidebar.driver")}
+                      </Link>
+                    ) : null}
                   </motion.div>
                 ) : null}
               </AnimatePresence>

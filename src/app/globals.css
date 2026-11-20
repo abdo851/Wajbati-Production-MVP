@@ -1,20 +1,24 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f7f4ef;
-  --foreground: #1b1611;
-  --card: #fffcf8;
-  --muted: #7a7168;
-  --muted-strong: #5f574f;
-  --line: #e4ddd3;
-  --terracotta: #a44e32;
-  --terracotta-deep: #7e3722;
+  /* RIGH Marketplace — deep red + warm cream */
+  --background: #f6f0e8;
+  --foreground: #1f1412;
+  --card: #fffdf9;
+  --muted: #8a7a72;
+  --muted-strong: #5c4b45;
+  --line: #e8ddd4;
+  --brand: #9b1d2e;
+  --brand-deep: #6f1420;
+  --burgundy: #4a0f18;
+  --terracotta: #9b1d2e;
+  --terracotta-deep: #6f1420;
   --saffron: #c8963c;
   --olive: #5c7250;
   --gold: #c9a24b;
   --gold-deep: #9a7428;
-  --surface: #f0ebe3;
-  --ink: #17130f;
+  --surface: #efe6dc;
+  --ink: #1f1412;
 }
 
 @utility pt-safe {
@@ -71,6 +75,9 @@
   --color-card: var(--card);
   --color-muted: var(--muted);
   --color-line: var(--line);
+  --color-brand: var(--brand);
+  --color-brand-deep: var(--brand-deep);
+  --color-burgundy: var(--burgundy);
   --color-terracotta: var(--terracotta);
   --color-terracotta-deep: var(--terracotta-deep);
   --color-saffron: var(--saffron);
@@ -92,8 +99,9 @@ html {
 
 body {
   background:
-    radial-gradient(900px 380px at 92% -8%, rgb(201 162 75 / 10%), transparent 55%),
-    linear-gradient(180deg, #faf7f2 0%, var(--background) 38%);
+    radial-gradient(920px 420px at 100% -10%, rgb(155 29 46 / 10%), transparent 55%),
+    radial-gradient(720px 360px at 0% 8%, rgb(201 162 75 / 8%), transparent 50%),
+    linear-gradient(180deg, #faf6f0 0%, var(--background) 42%);
   background-attachment: fixed;
   color: var(--foreground);
   font-family: var(--font-sans);
@@ -101,7 +109,7 @@ body {
 }
 
 ::selection {
-  background: #ebd9ae;
+  background: rgb(155 29 46 / 18%);
   color: var(--ink);
 }
 
@@ -153,9 +161,9 @@ html[lang="ar"] .font-display {
   display: flex;
   min-height: 100dvh;
   background:
-    radial-gradient(1000px 460px at 88% -12%, rgb(201 162 75 / 26%), transparent 58%),
-    radial-gradient(760px 400px at 0% 0%, rgb(164 78 50 / 14%), transparent 50%),
-    linear-gradient(180deg, #faf8f5 0%, #f1ece5 100%);
+    radial-gradient(1000px 460px at 88% -12%, rgb(155 29 46 / 16%), transparent 58%),
+    radial-gradient(760px 400px at 0% 0%, rgb(201 162 75 / 14%), transparent 50%),
+    linear-gradient(180deg, #faf6f0 0%, #efe6dc 100%);
 }
 
 .lift-card {

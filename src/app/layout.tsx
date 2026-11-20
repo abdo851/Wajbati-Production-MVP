@@ -25,7 +25,7 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
-  themeColor: "#C8963C",
+  themeColor: "#9B1D2E",
 };
 
 export const metadata: Metadata = {
@@ -58,6 +58,12 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       className={`${outfit.variable} ${fraunces.variable} ${alexandria.variable} h-full antialiased`}
     >
       <body className="flex min-h-dvh min-h-screen flex-col pt-safe pr-safe pb-safe pl-safe">
+        {/*
+          SSR always starts as Arabic. LanguageProvider must keep the first
+          client paint on `initial` and only sync cookie/localStorage after
+          mount — otherwise LanguageMenu hydrates with a mismatched label.
+          Do not read cookies() here: Cache Components prerender blocks on it.
+        */}
         <LanguageProvider initial="ar">{children}</LanguageProvider>
         <AppToaster />
         <ServiceWorkerRegister />

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { motion, type Variants } from "framer-motion";
 import { ChefHat, Bike } from "lucide-react";
 import { useI18n } from "@/components/language";
+import { marketplaceVisibility } from "@/lib/marketplace-visibility";
 
 const container: Variants = {
   hidden: {},
@@ -27,6 +28,7 @@ export function JoinIntro() {
     document.title = `${t("nav.join")} · Righ`;
   }, [t]);
 
+  const showDriver = marketplaceVisibility.showCustomerDriverRecruitment;
   const cards = [
     {
       href: "/chef",
@@ -35,21 +37,25 @@ export function JoinIntro() {
       body: t("join.chefBody"),
       cta: t("join.chefCta"),
     },
-    {
-      href: "/driver",
-      icon: Bike,
-      title: t("join.driver"),
-      body: t("join.driverBody"),
-      cta: t("join.driverCta"),
-    },
-  ] as const;
+    ...(showDriver
+      ? [
+          {
+            href: "/driver",
+            icon: Bike,
+            title: t("join.driver"),
+            body: t("join.driverBody"),
+            cta: t("join.driverCta"),
+          },
+        ]
+      : []),
+  ];
 
   return (
     <div>
       <motion.div variants={container} initial="hidden" animate="show">
         <motion.p
           variants={item}
-          className="text-[0.7rem] font-bold tracking-[0.16em] text-gold-deep uppercase"
+          className="text-[0.7rem] font-bold tracking-[0.16em] text-brand uppercase"
         >
           {t("join.kicker")}
         </motion.p>
@@ -57,17 +63,17 @@ export function JoinIntro() {
           variants={item}
           className="mt-2 max-w-[18ch] font-display text-[1.85rem] leading-[1.2] text-ink sm:max-w-2xl sm:text-4xl"
         >
-          {t("join.title")}
+          {t(showDriver ? "join.title" : "join.titleMarketplace")}
         </motion.h1>
         <motion.p
           variants={item}
           className="mt-4 max-w-2xl text-[0.95rem] leading-7 text-[color:var(--muted-strong)] sm:text-base sm:leading-8"
         >
-          {t("join.subtitle")}
+          {t(showDriver ? "join.subtitle" : "join.subtitleMarketplace")}
         </motion.p>
       </motion.div>
 
-      <div className="mt-8 grid gap-4 sm:mt-10 md:grid-cols-2">
+      <div className={`mt-8 grid gap-4 sm:mt-10 ${showDriver ? "md:grid-cols-2" : "md:grid-cols-1 md:max-w-xl"}`}>
         {cards.map((card) => (
           <motion.div
             key={card.href}

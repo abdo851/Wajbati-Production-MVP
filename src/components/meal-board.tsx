@@ -14,6 +14,7 @@ import { useI18n } from "@/components/language";
 import { useLiveQuery } from "@/components/use-live-query";
 import { readCheckout, rememberReceipt, writeCheckout } from "@/lib/guest";
 import { SplashScreen } from "@/components/splash-screen";
+import { marketplaceVisibility } from "@/lib/marketplace-visibility";
 
 const LocationPicker = dynamic(() => import("@/components/location-picker").then((mod) => mod.LocationPicker), { ssr: false });
 
@@ -22,23 +23,43 @@ export function MealBoard() {
   const { t, lang } = useI18n();
   const [selected, setSelected] = useState<PublicMeal | null>(null);
   const [range, setRange] = useState<"today" | "yesterday" | "recent">("today");
+  const [query, setQuery] = useState("");
+  const [city, setCity] = useState<string>("all");
   const [minSplashPassed, setMinSplashPassed] = useState(false);
+  const allowOrderFlow = marketplaceVisibility.showCustomerMealOrderFlow;
 
   useEffect(() => {
     const timer = window.setTimeout(() => setMinSplashPassed(true), 4000);
     return () => window.clearTimeout(timer);
   }, []);
   const today = data?.serviceDate ?? "";
-  const meals = (data?.meals ?? []).filter((meal) => {
+  const dated = (data?.meals ?? []).filter((meal) => {
     if (!today) return false;
     if (range === "today") return meal.serviceDate === today;
     if (range === "yesterday") return meal.serviceDate === addCasablancaDays(today, -1);
     return meal.serviceDate >= addCasablancaDays(today, -3) && meal.serviceDate <= today;
   });
-  const canOrder = range === "today";
+  const cities = Array.from(
+    new Set(dated.map((meal) => meal.city.trim()).filter(Boolean)),
+  ).sort((a, b) => a.localeCompare(b));
+  const needle = query.trim().toLowerCase();
+  const meals = dated.filter((meal) => {
+    if (city !== "all" && meal.city.trim() !== city) return false;
+    if (!needle) return true;
+    const haystack = `${meal.title} ${meal.description} ${meal.kitchenName} ${meal.city}`.toLowerCase();
+    return haystack.includes(needle);
+  });
+  const canOrder = allowOrderFlow && range === "today";
   const currentMeal = meals.find((meal) => meal.id === selected?.id) ?? selected;
   const portions = meals.reduce((sum, meal) => sum + meal.remainingQuantity, 0);
   const kitchens = new Set(meals.map((meal) => meal.kitchenName)).size;
+  const sellers = Array.from(
+    new Map(
+      meals
+        .filter((meal) => meal.chefId)
+        .map((meal) => [meal.chefId!, { id: meal.chefId!, name: meal.kitchenName, city: meal.city }] as const),
+    ).values(),
+  );
 
   return (
     <section id="meals" className="mx-auto max-w-6xl scroll-mt-20 px-3 py-8 sm:px-6">
@@ -63,6 +84,49 @@ export function MealBoard() {
           </p>
         </div>
       </div>
+
+      <label className="mt-5 block">
+        <span className="sr-only">{t("market.searchPlaceholder")}</span>
+        <input
+          className={inputClass}
+          type="search"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder={t("market.searchPlaceholder")}
+          autoComplete="off"
+        />
+      </label>
+
+      {cities.length > 0 ? (
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button
+            type="button"
+            className={`min-h-10 rounded-full px-4 text-sm font-semibold transition duration-200 ${
+              city === "all"
+                ? "bg-brand text-white shadow-[0_8px_18px_-10px_rgba(111,20,32,0.55)]"
+                : "border border-line bg-card text-foreground hover:border-brand/35 hover:bg-brand/[0.04]"
+            }`}
+            onClick={() => setCity("all")}
+          >
+            {t("market.allCities")}
+          </button>
+          {cities.map((name) => (
+            <button
+              key={name}
+              type="button"
+              className={`min-h-10 rounded-full px-4 text-sm font-semibold transition duration-200 ${
+                city === name
+                  ? "bg-brand text-white shadow-[0_8px_18px_-10px_rgba(111,20,32,0.55)]"
+                  : "border border-line bg-card text-foreground hover:border-brand/35 hover:bg-brand/[0.04]"
+              }`}
+              onClick={() => setCity(name)}
+            >
+              {name}
+            </button>
+          ))}
+        </div>
+      ) : null}
+
       <div className="mt-5 flex flex-wrap gap-2">
         {([
           ["today", t("meal.today")],
@@ -74,8 +138,8 @@ export function MealBoard() {
             type="button"
             className={`min-h-10 rounded-full px-4 text-sm font-semibold transition duration-200 ${
               range === id
-                ? "bg-ink text-white shadow-[0_8px_18px_-10px_rgba(23,19,15,0.45)]"
-                : "border border-line bg-card text-foreground hover:border-gold/45 hover:bg-gold/5"
+                ? "bg-brand text-white shadow-[0_8px_18px_-10px_rgba(111,20,32,0.55)]"
+                : "border border-line bg-card text-foreground hover:border-brand/35 hover:bg-brand/[0.04]"
             }`}
             onClick={() => setRange(id)}
           >
@@ -105,22 +169,54 @@ export function MealBoard() {
             key={meal.id}
             meal={meal}
             index={index}
+            marketplace={!allowOrderFlow}
             canOrder={canOrder}
-            onOrder={(next) => {
-              if (!canOrder || window.localStorage.getItem("wajbati_terms_accepted") !== "true") return;
+            onOpen={(next) => {
+              if (allowOrderFlow) {
+                if (!canOrder || window.localStorage.getItem("wajbati_terms_accepted") !== "true") return;
+              }
               setSelected(next);
             }}
           />
         ))}
       </div>
+
+      {sellers.length > 0 ? (
+        <div className="mt-10">
+          <h3 className="font-display text-xl text-ink sm:text-2xl">{t("market.sellersTitle")}</h3>
+          <ul className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {sellers.map((seller) => (
+              <li key={seller.id}>
+                <Link
+                  href={`/chef/${seller.id}`}
+                  className="flex items-center justify-between gap-3 rounded-2xl border border-line bg-card px-4 py-3 shadow-[0_1px_2px_rgb(31_20_18_/0.04)] transition hover:border-brand/30 hover:shadow-lux"
+                >
+                  <span className="min-w-0">
+                    <span className="block truncate font-semibold text-ink">{seller.name}</span>
+                    {seller.city ? (
+                      <span className="mt-0.5 block truncate text-xs text-[color:var(--muted-strong)]">{seller.city}</span>
+                    ) : null}
+                  </span>
+                  <span className="text-sm font-semibold text-brand">{t("market.visitStore")}</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
       <AnimatePresence>
         {currentMeal ? (
-          <OrderDialog
-            key={currentMeal.id}
-            meal={currentMeal}
-            onClose={() => setSelected(null)}
-            onPlaced={() => void reload()}
-          />
+          allowOrderFlow ? (
+            <OrderDialog
+              key={currentMeal.id}
+              meal={currentMeal}
+              onClose={() => setSelected(null)}
+              onPlaced={() => void reload()}
+            />
+          ) : (
+            <MarketplaceDetailSheet key={currentMeal.id} meal={currentMeal} onClose={() => setSelected(null)} />
+          )
         ) : null}
       </AnimatePresence>
     </section>
@@ -128,7 +224,19 @@ export function MealBoard() {
 }
 
 const MealCard = memo(
-  function MealCard({ meal, index, canOrder, onOrder }: { meal: PublicMeal; index: number; canOrder: boolean; onOrder: (meal: PublicMeal) => void }) {
+  function MealCard({
+    meal,
+    index,
+    marketplace,
+    canOrder,
+    onOpen,
+  }: {
+    meal: PublicMeal;
+    index: number;
+    marketplace: boolean;
+    canOrder: boolean;
+    onOpen: (meal: PublicMeal) => void;
+  }) {
   const { t, lang } = useI18n();
   const soldOut = meal.remainingQuantity <= 0;
   const photos = meal.photoUrls?.length ? meal.photoUrls : meal.photoUrl ? [meal.photoUrl] : [];
@@ -142,7 +250,7 @@ const MealCard = memo(
       transition={{ duration: 0.4, delay: Math.min(index * 0.05, 0.35), ease: [0.22, 1, 0.36, 1] }}
       whileHover={{ y: -3 }}
       whileTap={{ scale: 0.985 }}
-      className="group flex flex-col overflow-hidden rounded-[1.25rem] border border-line bg-card shadow-[0_1px_2px_rgb(23_19_15_/0.04),0_14px_32px_-22px_rgb(23_19_15_/0.2)] transition-shadow duration-300 hover:shadow-lux"
+      className="group flex flex-col overflow-hidden rounded-[1.35rem] border border-line bg-card shadow-[0_1px_2px_rgb(31_20_18_/0.04),0_16px_36px_-24px_rgb(111_20_32_/0.28)] transition-shadow duration-300 hover:shadow-lux"
     >
       <div className="relative aspect-square w-full overflow-hidden bg-surface">
         {photo ? (
@@ -155,17 +263,17 @@ const MealCard = memo(
             className="h-full w-full object-cover transition-transform duration-500 ease-out group-hover:scale-[1.04]"
           />
         ) : (
-          <span className="flex h-full items-center justify-center bg-[linear-gradient(160deg,#f3eee6,#e8e0d4)] text-sm font-medium text-[color:var(--muted-strong)]" aria-hidden="true">
+          <span className="flex h-full items-center justify-center bg-[linear-gradient(160deg,#f6efe8,#eadfd4)] text-sm font-medium text-[color:var(--muted-strong)]" aria-hidden="true">
             Righ
           </span>
         )}
         {!soldOut ? (
-          <span className="absolute start-2 top-2 rounded-full bg-white/92 px-2 py-0.5 text-[10px] font-bold text-olive shadow-sm">
+          <span className="absolute start-2 top-2 rounded-full bg-white/92 px-2 py-0.5 text-[10px] font-bold text-brand shadow-sm">
             {t("board.left", { left: meal.remainingQuantity, max: meal.maxQuantity })}
           </span>
         ) : null}
         {soldOut ? (
-          <span className="absolute inset-0 flex items-center justify-center bg-ink/45 backdrop-blur-[2px]">
+          <span className="absolute inset-0 flex items-center justify-center bg-burgundy/45 backdrop-blur-[2px]">
             <span className="rounded-full bg-white/92 px-3 py-1 text-xs font-bold text-ink">{t("board.soldOut")}</span>
           </span>
         ) : null}
@@ -179,7 +287,7 @@ const MealCard = memo(
       <div className="flex flex-1 flex-col gap-1 p-3">
         <h3 className="line-clamp-2 min-h-10 text-sm font-semibold leading-5 text-ink">{meal.title}</h3>
         {meal.chefId ? (
-          <Link href={`/chef/${meal.chefId}`} className="truncate text-xs font-medium text-gold-deep underline-offset-2 hover:underline">
+          <Link href={`/chef/${meal.chefId}`} className="truncate text-xs font-medium text-brand underline-offset-2 hover:underline">
             {meal.kitchenName}
           </Link>
         ) : (
@@ -188,13 +296,13 @@ const MealCard = memo(
         <p className="text-base font-bold text-ink">{formatMad(meal.priceMad, lang)}</p>
         <button
           type="button"
-          className="mt-auto inline-flex h-9 items-center justify-center rounded-full bg-ink px-3 text-xs font-bold text-white transition duration-200 hover:bg-ink/90 active:scale-[0.97] disabled:bg-line disabled:text-muted"
-          disabled={soldOut || !canOrder}
-          onClick={() => onOrder(meal)}
+          className="mt-auto inline-flex h-9 items-center justify-center rounded-full bg-brand px-3 text-xs font-bold text-white transition duration-200 hover:bg-brand-deep active:scale-[0.97] disabled:bg-line disabled:text-muted"
+          disabled={marketplace ? false : soldOut || !canOrder}
+          onClick={() => onOpen(meal)}
         >
-          {soldOut ? t("board.soldOut") : t("board.add")}
+          {marketplace ? t("market.viewDish") : soldOut ? t("board.soldOut") : t("board.add")}
         </button>
-        {!canOrder ? <p className="text-[11px] leading-4 text-terracotta-deep">{t("meal.pastOrder")}</p> : null}
+        {!marketplace && !canOrder ? <p className="text-[11px] leading-4 text-terracotta-deep">{t("meal.pastOrder")}</p> : null}
       </div>
     </motion.article>
   );
@@ -202,6 +310,7 @@ const MealCard = memo(
   (previous, next) =>
     previous.meal.id === next.meal.id &&
     previous.canOrder === next.canOrder &&
+    previous.marketplace === next.marketplace &&
     previous.meal.title === next.meal.title &&
     previous.meal.priceMad === next.meal.priceMad &&
     previous.meal.remainingQuantity === next.meal.remainingQuantity &&
@@ -209,6 +318,113 @@ const MealCard = memo(
     previous.meal.photoUrl === next.meal.photoUrl &&
     (previous.meal.photoUrls?.length ?? 0) === (next.meal.photoUrls?.length ?? 0),
 );
+
+function MarketplaceDetailSheet({ meal, onClose }: { meal: PublicMeal; onClose: () => void }) {
+  const { t, lang } = useI18n();
+  const soldOut = meal.remainingQuantity <= 0;
+  const photo = meal.photoUrls?.[0] ?? meal.photoUrl;
+
+  useEffect(() => {
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") onClose();
+    }
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = previous;
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [onClose]);
+
+  return (
+    <motion.div
+      className="fixed inset-0 z-[60] flex items-end justify-center bg-burgundy/45 p-0 backdrop-blur-md sm:items-center sm:p-6"
+      onClick={onClose}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.2 }}
+    >
+      <motion.div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="market-dish-title"
+        className="flex max-h-[min(92dvh,44rem)] w-full max-w-lg flex-col overflow-hidden rounded-t-[1.75rem] border border-line/70 bg-card shadow-lux-lg sm:rounded-3xl"
+        onClick={(event) => event.stopPropagation()}
+        initial={{ opacity: 0, y: 28 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: 16 }}
+        transition={{ type: "spring", stiffness: 340, damping: 30 }}
+      >
+        <div className="relative">
+          {photo ? (
+            <div className="aspect-[16/10] w-full overflow-hidden bg-surface">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={photo} alt="" className="h-full w-full object-cover" />
+            </div>
+          ) : (
+            <div className="h-14 w-full bg-surface" />
+          )}
+          <button
+            type="button"
+            className={`${quietButtonClass} absolute end-3 top-3 min-h-10 bg-white/95 px-3 shadow-sm`}
+            onClick={onClose}
+          >
+            {t("order.close")}
+          </button>
+        </div>
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-5">
+          <div className="min-w-0">
+            {meal.chefId ? (
+              <Link href={`/chef/${meal.chefId}`} className="text-sm font-semibold text-brand underline-offset-2 hover:underline">
+                {meal.kitchenName}
+              </Link>
+            ) : (
+              <p className="text-sm font-semibold text-brand">{meal.kitchenName}</p>
+            )}
+            <h2 id="market-dish-title" className="mt-1 font-display text-3xl leading-tight text-ink">
+              {meal.title}
+            </h2>
+          </div>
+          <p className="text-base leading-7 text-[color:var(--muted-strong)]">{meal.description}</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="rounded-full bg-brand/10 px-3 py-1 text-sm font-bold text-brand">
+              {formatMad(meal.priceMad, lang)}
+            </span>
+            <span className="rounded-full bg-surface px-3 py-1 text-sm font-semibold text-[color:var(--muted-strong)]">
+              {soldOut
+                ? t("board.soldOut")
+                : t("board.left", { left: meal.remainingQuantity, max: meal.maxQuantity })}
+            </span>
+            {meal.city ? (
+              <span className="rounded-full bg-surface px-3 py-1 text-sm font-semibold text-[color:var(--muted-strong)]">
+                {meal.city}
+              </span>
+            ) : null}
+          </div>
+          <div className="rounded-2xl border border-dashed border-line bg-surface/70 px-4 py-4">
+            <p className="text-sm font-semibold text-ink">{t("market.contactDisabled")}</p>
+            <p className="mt-2 text-sm leading-6 text-[color:var(--muted-strong)]">{t("market.contactDisabledHint")}</p>
+            <button
+              type="button"
+              className={`${primaryButtonClass} mt-4 w-full`}
+              disabled
+              aria-disabled="true"
+            >
+              {t("market.contactDisabled")}
+            </button>
+          </div>
+          {meal.chefId ? (
+            <Link href={`/chef/${meal.chefId}`} className={`${quietButtonClass} w-full`}>
+              {t("market.visitStore")}
+            </Link>
+          ) : null}
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}
 
 function OrderDialog({
   meal,
@@ -339,7 +555,6 @@ function OrderDialog({
         <div className="flex items-start justify-between gap-3 px-5 pt-5">
           <div className="min-w-0">
             <p className="text-sm font-semibold text-gold-deep">{meal.kitchenName}</p>
-            <p className="text-sm text-olive">{t("chef.rating")}</p>
             <h2 id="order-title" className="mt-1 font-display text-3xl">
               {meal.title}
             </h2>

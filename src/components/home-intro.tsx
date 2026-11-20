@@ -2,6 +2,7 @@
 
 import { motion, type Variants } from "framer-motion";
 import { useI18n } from "@/components/language";
+import { marketplaceVisibility } from "@/lib/marketplace-visibility";
 
 const container: Variants = {
   hidden: {},
@@ -20,6 +21,7 @@ const item: Variants = {
 /** Compact customer hero — meals follow immediately. */
 export function HomeIntro() {
   const { t } = useI18n();
+  const legacyFleet = marketplaceVisibility.showCustomerDeliveryFleetMarketing;
 
   return (
     <section className="relative isolate overflow-hidden border-b border-line/70">
@@ -28,7 +30,7 @@ export function HomeIntro() {
         aria-hidden="true"
         style={{
           background:
-            "radial-gradient(90% 70% at 100% 0%, rgb(201 162 75 / 18%), transparent 55%), radial-gradient(70% 55% at 0% 20%, rgb(92 114 80 / 10%), transparent 50%), linear-gradient(180deg, #faf7f2 0%, #f3efe8 100%)",
+            "radial-gradient(90% 70% at 100% 0%, rgb(155 29 46 / 16%), transparent 55%), radial-gradient(70% 55% at 0% 20%, rgb(201 162 75 / 12%), transparent 50%), linear-gradient(180deg, #faf6f0 0%, #f3ebe3 100%)",
         }}
       />
       <div
@@ -43,7 +45,7 @@ export function HomeIntro() {
       >
         <motion.p
           variants={item}
-          className="text-[0.7rem] font-bold tracking-[0.18em] text-gold-deep uppercase sm:text-xs"
+          className="text-[0.7rem] font-bold tracking-[0.18em] text-brand uppercase sm:text-xs"
         >
           {t("home.kicker")}
         </motion.p>
@@ -57,17 +59,17 @@ export function HomeIntro() {
           variants={item}
           className="max-w-md text-[0.95rem] leading-7 text-[color:var(--muted-strong)] sm:text-base sm:leading-8"
         >
-          {t("home.body")}
+          {t(legacyFleet ? "home.bodyLegacy" : "home.body")}
         </motion.p>
         <motion.div variants={item} className="flex flex-wrap items-center gap-3">
           <a
             href="#meals"
-            className="inline-flex min-h-11 items-center justify-center rounded-full bg-ink px-5 text-sm font-semibold text-white transition duration-200 hover:bg-ink/90 active:scale-[0.98]"
+            className="inline-flex min-h-11 items-center justify-center rounded-full bg-brand px-5 text-sm font-semibold text-white shadow-[0_12px_24px_-14px_rgba(111,20,32,0.65)] transition duration-200 hover:bg-brand-deep active:scale-[0.98]"
           >
             {t("home.ctaMeals")}
           </a>
           <p className="max-w-[18rem] text-xs leading-5 text-[color:var(--muted-strong)] sm:text-sm sm:leading-6">
-            {t("home.codHint")}
+            {t(legacyFleet ? "home.codHintLegacy" : "home.codHint")}
           </p>
         </motion.div>
       </motion.div>
@@ -78,6 +80,7 @@ export function HomeIntro() {
 /** Customer guidance placed after the meal board. */
 export function HomeGuide() {
   const { t } = useI18n();
+  const legacyFleet = marketplaceVisibility.showCustomerDeliveryFleetMarketing;
 
   const reasons = [
     { title: t("home.why1Title"), body: t("home.why1Body") },
@@ -85,7 +88,9 @@ export function HomeGuide() {
     { title: t("home.why3Title"), body: t("home.why3Body") },
   ] as const;
 
-  const steps = [t("home.step1"), t("home.step2"), t("home.step3")] as const;
+  const steps = legacyFleet
+    ? ([t("home.step1Legacy"), t("home.step2Legacy"), t("home.step3Legacy")] as const)
+    : ([t("home.step1"), t("home.step2"), t("home.step3")] as const);
 
   return (
     <div>
@@ -94,7 +99,7 @@ export function HomeGuide() {
         <ol className="mt-4 grid gap-3 sm:grid-cols-3">
           {steps.map((step, index) => (
             <li key={step} className="rounded-2xl border border-line/80 bg-white/70 px-4 py-4 backdrop-blur-sm">
-              <span className="inline-flex size-7 items-center justify-center rounded-full bg-gold/15 text-sm font-bold text-gold-deep">
+              <span className="inline-flex size-7 items-center justify-center rounded-full bg-brand/10 text-sm font-bold text-brand">
                 {index + 1}
               </span>
               <p className="mt-3 text-sm leading-6 text-[color:var(--muted-strong)] sm:text-[0.95rem] sm:leading-7">
@@ -121,7 +126,7 @@ export function HomeGuide() {
         <div className="rounded-3xl border border-line/80 bg-surface/80 px-5 py-6 sm:px-7 sm:py-7">
           <h2 className="font-display text-xl text-ink sm:text-2xl">{t("home.trustTitle")}</h2>
           <p className="mt-3 max-w-2xl text-sm leading-7 text-[color:var(--muted-strong)] sm:text-base">
-            {t("home.trustBody")}
+            {t(legacyFleet ? "home.trustBodyLegacy" : "home.trustBody")}
           </p>
         </div>
       </section>

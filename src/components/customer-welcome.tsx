@@ -5,6 +5,7 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import { useI18n } from "@/components/language";
 import { inputClass, primaryButtonClass, quietButtonClass } from "@/components/ui";
+import { marketplaceVisibility } from "@/lib/marketplace-visibility";
 
 export const VISIT_KEY = "wajbati_visit_intent";
 
@@ -84,7 +85,11 @@ export function CustomerWelcome() {
               {t("welcome.orderOnly")}
             </motion.button>
             <motion.button type="button" className={quietButtonClass} onClick={() => choose("join")} whileTap={{ scale: 0.97 }}>
-              {t("welcome.join")}
+              {t(
+                marketplaceVisibility.showCustomerDriverRecruitment
+                  ? "welcome.join"
+                  : "welcome.joinMarketplace",
+              )}
             </motion.button>
             <motion.button type="button" className={quietButtonClass} onClick={() => choose("order")} whileTap={{ scale: 0.97 }}>
               {t("welcome.skip")}
@@ -95,9 +100,11 @@ export function CustomerWelcome() {
             <Link href="/chef" className={primaryButtonClass} onClick={() => setOpen(false)}>
               {t("welcome.asChef")}
             </Link>
-            <Link href="/driver" className={quietButtonClass} onClick={() => setOpen(false)}>
-              {t("welcome.asDriver")}
-            </Link>
+            {marketplaceVisibility.showCustomerDriverRecruitment ? (
+              <Link href="/driver" className={quietButtonClass} onClick={() => setOpen(false)}>
+                {t("welcome.asDriver")}
+              </Link>
+            ) : null}
           </div>
         )}
       </motion.div>

@@ -55,7 +55,7 @@ export function ChefPublicProfile({ initial }: { initial: PublicChefProfile }) {
         transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
         className="overflow-hidden rounded-3xl border border-line bg-card shadow-lux"
       >
-        <div className="relative h-44 bg-gradient-to-l from-gold/30 via-surface to-terracotta/15 sm:h-56">
+        <div className="relative h-44 bg-gradient-to-l from-brand/30 via-brand/[0.08] to-surface sm:h-56">
           {profile.coverUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={profile.coverUrl} alt="" className="h-full w-full object-cover" />
@@ -64,7 +64,7 @@ export function ChefPublicProfile({ initial }: { initial: PublicChefProfile }) {
         <div className="relative px-5 pb-6 pt-0 sm:px-8">
           <div className="-mt-12 flex flex-wrap items-end justify-between gap-4">
             <div className="flex items-end gap-4">
-              <div className="size-24 rounded-full bg-gradient-to-l from-gold to-gold-deep p-[3px] sm:size-28">
+              <div className="size-24 rounded-full bg-gradient-to-l from-brand to-brand-deep p-[3px] sm:size-28">
                 <div className="size-full overflow-hidden rounded-full border-4 border-card bg-surface">
                   {profile.avatarUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element

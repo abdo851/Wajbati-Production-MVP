@@ -19,14 +19,6 @@ type LanguageValue = {
 const LanguageContext = createContext<LanguageValue | null>(null);
 const STORAGE_KEY = "wajbati_lang";
 
-function storedLang(): Lang | null {
-  const saved = window.localStorage.getItem(STORAGE_KEY);
-  if (saved === "ar" || saved === "en" || saved === "fr") return saved;
-  const match = document.cookie.match(/(?:^|; )wajbati_lang=(ar|en|fr)/);
-  if (match?.[1] === "en" || match?.[1] === "fr" || match?.[1] === "ar") return match[1];
-  return null;
-}
-
 function applyLang(next: Lang) {
   document.cookie = `wajbati_lang=${next}; path=/; max-age=31536000; samesite=lax`;
   window.localStorage.setItem(STORAGE_KEY, next);
@@ -38,10 +30,19 @@ export function LanguageProvider({ initial, children }: { initial: Lang; childre
   const [lang, setLangState] = useState<Lang>(initial);
   const [languageOpen, setLanguageOpen] = useState(false);
 
+  // First paint must stay on `initial` (SSR). After hydration, prefer cookie
+  // then localStorage so LanguageMenu does not mismatch on the first client render.
   useEffect(() => {
-    const stored = storedLang();
     const timeout = window.setTimeout(() => {
-      if (stored) setLangState(stored);
+      const match = document.cookie.match(/(?:^|; )wajbati_lang=(ar|en|fr)/);
+      const fromCookie = match?.[1] === "ar" || match?.[1] === "en" || match?.[1] === "fr" ? match[1] : null;
+      const saved = window.localStorage.getItem(STORAGE_KEY);
+      const fromStorage = saved === "ar" || saved === "en" || saved === "fr" ? saved : null;
+      const next = fromCookie ?? fromStorage;
+      if (!next) return;
+      if (fromCookie) window.localStorage.setItem(STORAGE_KEY, fromCookie);
+      setLangState(next);
+      applyLang(next);
     }, 0);
     return () => window.clearTimeout(timeout);
   }, []);
@@ -98,7 +99,7 @@ export function LanguageMenu() {
   return (
     <button
       type="button"
-      className="inline-flex min-h-10 max-w-[7.5rem] shrink-0 items-center gap-1 rounded-full border border-line/90 bg-white/85 px-2 text-[11px] font-semibold text-ink shadow-[0_6px_14px_-12px_rgba(23,19,15,0.5)] transition duration-200 hover:border-gold/55 hover:bg-gold/5 sm:max-w-none sm:min-h-11 sm:gap-2 sm:px-3.5 sm:text-sm"
+      className="inline-flex min-h-10 max-w-[7.5rem] shrink-0 items-center gap-1 rounded-full border border-line/90 bg-white/85 px-2 text-[11px] font-semibold text-ink shadow-[0_6px_14px_-12px_rgba(31,20,18,0.5)] transition duration-200 hover:border-brand/40 hover:bg-brand/[0.04] sm:max-w-none sm:min-h-11 sm:gap-2 sm:px-3.5 sm:text-sm"
       aria-haspopup="dialog"
       aria-expanded={languageOpen}
       aria-label={t("lang.label")}

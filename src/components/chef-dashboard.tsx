@@ -114,7 +114,7 @@ function AvatarPicker({ initialSrc, onSaved }: { initialSrc: string | null; onSa
 
   return (
     <div className="mt-4">
-      <label className="inline-flex aspect-square size-32 cursor-pointer items-center justify-center overflow-hidden rounded-full bg-card shadow-lux ring-4 ring-gold/25">
+      <label className="inline-flex aspect-square size-32 cursor-pointer items-center justify-center overflow-hidden rounded-full bg-card shadow-lux ring-4 ring-brand/20">
         {src ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={src} alt="" className="h-full w-full object-cover" />
@@ -282,10 +282,10 @@ function Kitchen({
   return (
     <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-10 sm:px-6">
       <section className="overflow-hidden rounded-3xl border border-line bg-card shadow-lux">
-        <div className="h-20 bg-gradient-to-l from-gold/25 via-surface to-terracotta/10" />
+        <div className="h-20 bg-gradient-to-l from-brand/30 via-brand/[0.08] to-surface" />
         <div className="p-5 sm:px-8 sm:pb-8">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="text-sm font-bold text-gold-deep">{kitchen ?? t("chef.kitchenFallback")}</p>
+          <p className="text-sm font-bold text-brand">{kitchen ?? t("chef.kitchenFallback")}</p>
           <div className="flex items-center gap-3">
             <LiveDot />
             <button type="button" className={quietButtonClass} onClick={() => void logout()}>
@@ -310,7 +310,7 @@ function Kitchen({
         <p className="mt-1 text-base leading-7">{bio || "—"}</p>
         <PhotoGallery images={album} onChange={setAlbum} />
         <p className="mt-3 text-sm font-medium text-muted">{t("chef.city")}</p>
-        <p className="mt-1 text-base text-terracotta">{city || "—"}</p>
+        <p className="mt-1 text-base font-semibold text-brand">{city || "—"}</p>
         <ProfileEditModal open={editingProfile} onClose={() => setEditingProfile(false)} role="chef" onSaved={onAvatarSaved} />
         <WalletPanel />
         </div>
@@ -324,8 +324,8 @@ function Kitchen({
         <form onSubmit={publish} className="space-y-3">
           <div className="block text-sm">
             <span className="mb-1.5 block font-semibold">{t("chef.photo")}</span>
-            <div className="flex min-h-40 flex-col items-center justify-center rounded-3xl border border-dashed border-terracotta/40 bg-terracotta/5 px-4 py-6 text-center">
-              <span className="mb-3 inline-flex size-12 items-center justify-center rounded-2xl bg-gradient-to-l from-gold to-gold-deep text-white shadow-[0_8px_20px_-8px_rgba(169,127,44,0.8)]" aria-hidden="true">
+            <div className="flex min-h-40 flex-col items-center justify-center rounded-3xl border border-dashed border-brand/30 bg-brand/[0.04] px-4 py-6 text-center">
+              <span className="mb-3 inline-flex size-12 items-center justify-center rounded-2xl bg-gradient-to-l from-brand to-brand-deep text-white shadow-[0_8px_20px_-8px_rgba(111,20,32,0.75)]" aria-hidden="true">
                 <svg viewBox="0 0 24 24" className="size-6" fill="none" stroke="currentColor" strokeWidth="1.6">
                   <path d="M4 16l4.5-4.5a2 2 0 012.8 0L16 16" />
                   <rect x="3" y="4" width="18" height="16" rx="2" />
@@ -362,11 +362,11 @@ function Kitchen({
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={photo.url} alt="" className="h-full w-full object-cover" />
                     {photoIndex === 0 ? (
-                      <span className="absolute start-1 top-1 rounded-full bg-gold-deep px-2 py-0.5 text-[10px] font-bold text-white">1</span>
+                      <span className="absolute start-1 top-1 rounded-full bg-brand px-2 py-0.5 text-[10px] font-bold text-white">1</span>
                     ) : null}
                     <button
                       type="button"
-                      className="absolute end-1 top-1 inline-flex size-6 items-center justify-center rounded-full bg-ink/60 text-xs text-white transition hover:bg-ink"
+                      className="absolute end-1 top-1 inline-flex size-6 items-center justify-center rounded-full bg-burgundy/70 text-xs text-white transition hover:bg-burgundy"
                       aria-label={t("chef.removeImage")}
                       onClick={() => removePhoto(photo.id)}
                     >
@@ -421,7 +421,7 @@ function Kitchen({
             ) : null}
             <ul className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4">
               {(data?.meals ?? []).map((meal) => (
-                <li key={meal.id} className="flex flex-col overflow-hidden rounded-xl border border-[#E7E0D6] bg-card shadow-[0_1px_2px_rgba(30,26,21,0.06),0_10px_24px_-18px_rgba(30,26,21,0.45)]">
+                <li key={meal.id} className="flex flex-col overflow-hidden rounded-[1.25rem] border border-line bg-card shadow-[0_1px_2px_rgba(31,20,18,0.05),0_14px_28px_-20px_rgba(111,20,32,0.28)]">
                   <div className="relative aspect-square w-full overflow-hidden bg-[#F3EBE1]">
                     {meal.photoUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element
@@ -440,11 +440,11 @@ function Kitchen({
                       {t("chef.portionsLeft", { left: meal.remainingQuantity, max: meal.maxQuantity })}
                       {meal.isPublished ? "" : ` · ${t("chef.hidden")}`}
                     </p>
-                    <div className="mt-auto flex gap-1 pt-1">
-                      <button type="button" className="h-8 flex-1 rounded-full border border-line text-xs font-medium" onClick={() => setEditing(editing === meal.id ? null : meal.id)}>
+                    <div className="mt-auto flex gap-1.5 pt-1.5">
+                      <button type="button" className={`${quietButtonClass} h-9 flex-1 px-2 text-xs`} onClick={() => setEditing(editing === meal.id ? null : meal.id)}>
                         {t("chef.edit")}
                       </button>
-                      <button type="button" className="h-8 flex-1 rounded-full border border-line text-xs font-medium" onClick={() => void removeMeal(meal.id)}>
+                      <button type="button" className={`${quietButtonClass} h-9 flex-1 px-2 text-xs`} onClick={() => void removeMeal(meal.id)}>
                         {t("chef.delete")}
                       </button>
                     </div>
@@ -518,7 +518,7 @@ function OrderList({ orders, onChanged, mapCenter, mapLabel }: { orders: ChefOrd
       ) : (
         <ul className="mt-3 space-y-3">
           {orders.map((order) => (
-            <li key={order.id} className="rounded-3xl border border-line bg-card p-4">
+            <li key={order.id} className="rounded-3xl border border-line bg-card p-4 shadow-[0_1px_2px_rgba(31,20,18,0.05),0_14px_28px_-20px_rgba(111,20,32,0.22)]">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <p className="font-medium">

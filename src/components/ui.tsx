@@ -26,13 +26,13 @@ export function StatusPill({ status }: { status: OrderStatus }) {
 }
 
 export const inputClass =
-  "w-full rounded-2xl border border-line bg-white px-4 py-3 text-base text-foreground outline-none transition placeholder:text-muted/60 focus-visible:border-gold focus-visible:ring-4 focus-visible:ring-gold/15";
+  "w-full rounded-2xl border border-line bg-white px-4 py-3 text-base text-foreground outline-none transition placeholder:text-muted/60 focus-visible:border-brand focus-visible:ring-4 focus-visible:ring-brand/15";
 
 export const primaryButtonClass =
-  "inline-flex min-h-11 items-center justify-center rounded-full bg-ink px-5 py-2.5 text-base font-semibold text-white shadow-[0_10px_22px_-12px_rgba(23,19,15,0.55)] transition duration-200 hover:bg-ink/90 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none";
+  "inline-flex min-h-11 items-center justify-center rounded-full bg-brand px-5 py-2.5 text-base font-semibold text-white shadow-[0_12px_24px_-14px_rgba(111,20,32,0.65)] transition duration-200 hover:bg-brand-deep active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none";
 
 export const quietButtonClass =
-  "inline-flex min-h-11 items-center justify-center rounded-full border border-line bg-white px-4 py-2 text-base font-semibold text-foreground transition duration-200 hover:border-gold/50 hover:bg-gold/5 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50";
+  "inline-flex min-h-11 items-center justify-center rounded-full border border-line bg-white px-4 py-2 text-base font-semibold text-foreground transition duration-200 hover:border-brand/35 hover:bg-brand/[0.04] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50";
 
 export function LiveDot() {
   const { t } = useI18n();
