@@ -61,16 +61,52 @@ export function supabaseTargetLooksSharedOrUnidentifiable(): boolean {
 }
 
 /**
- * Owner-approved temporary local admin convenience.
+ * True only for the ordinary isolated local test database (127.0.0.1:55432/righ_test).
+ * Fail closed on empty, malformed, shared, or non-isolated targets. Never logs the URL.
+ */
+export function databaseIsIsolatedLocalTestTarget(): boolean {
+  const raw = process.env.CUSTOM_DATABASE_URL || process.env.DATABASE_URL || "";
+  const value = raw.trim();
+  if (!value) return false;
+  try {
+    const url = new URL(value.replace(/^prisma\+/, ""));
+    const host = url.hostname.toLowerCase();
+    if (!hostLooksLocal(host) || hostLooksShared(host)) return false;
+    const port = url.port || "5432";
+    const database = (url.pathname || "/").replace(/^\//, "");
+    return port === "55432" && database === "righ_test";
+  } catch {
+    return false;
+  }
+}
+
+function localAdminPreviewFlagEnabled(): boolean {
+  // Prefer the explicit M0 preview flag; keep the older bypass name as an alias.
+  return process.env.RIGH_LOCAL_ADMIN_PREVIEW === "1" || process.env.RIGH_ALLOW_ADMIN_BYPASS === "1";
+}
+
+function looksLikeHostedOrVercelDeployment(): boolean {
+  // Platform marker used on Vercel builds/runtime. Do not treat a stray local token as enough.
+  if (process.env.VERCEL === "1") return true;
+  const vercelEnv = process.env.VERCEL_ENV;
+  return vercelEnv === "production" || vercelEnv === "preview";
+}
+
+/**
+ * Owner-approved temporary local admin preview convenience.
  * Requires ALL of:
  * - NODE_ENV === "development"
- * - RIGH_ALLOW_ADMIN_BYPASS === "1" (explicit opt-in; never set on Vercel)
- * - database is not Neon / shared / production-like
+ * - RIGH_LOCAL_ADMIN_PREVIEW=1 (or legacy alias RIGH_ALLOW_ADMIN_BYPASS=1)
+ * - not running on Vercel / hosted deployment env markers
+ * - Prisma URL is the isolated local test DB (127.0.0.1:55432/righ_test)
+ *
+ * Never enable via query params or client-only values. Never set these flags on Vercel.
  */
 export const ADMIN_AUTH_BYPASSED =
   process.env.NODE_ENV === "development" &&
-  process.env.RIGH_ALLOW_ADMIN_BYPASS === "1" &&
-  !databaseLooksSharedOrProduction();
+  localAdminPreviewFlagEnabled() &&
+  !looksLikeHostedOrVercelDeployment() &&
+  databaseIsIsolatedLocalTestTarget();
 
 /** True when the email is on the admin allowlist (role is not checked). */
 export function isAllowlistedAdminEmail(email: string | null | undefined): boolean {

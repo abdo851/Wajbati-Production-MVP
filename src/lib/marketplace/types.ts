@@ -17,6 +17,8 @@ export type MarketplaceListingRecord = {
   availability: ListingAvailability;
   isPublished: boolean;
   moderationStatus: ListingModerationStatus;
+  moderationReason: string | null;
+  previouslyApprovedAt: string | null;
   city: string;
   neighborhood: string;
   expiresAt: string | null;
@@ -66,13 +68,66 @@ export type AppNotificationRecord = {
   createdAt: string;
 };
 
+export type CaseStatus =
+  | "open"
+  | "under_review"
+  | "waiting_for_reporter"
+  | "waiting_for_seller"
+  | "action_required"
+  | "resolved"
+  | "dismissed"
+  | "reopened";
+
+export type ReportCategory = "spam" | "fraud" | "inappropriate" | "misleading" | "other" | "general";
+export type CasePriority = "low" | "normal" | "high" | "urgent";
+
 export type ListingReportRecord = {
   id: string;
   listingId: string;
   reporterUserId: string;
   reason: string;
-  status: "open" | "resolved" | "dismissed";
+  description: string | null;
+  category: ReportCategory;
+  priority: CasePriority;
+  status: CaseStatus;
+  assignedAdminId: string | null;
+  assignedAt: string | null;
+  decisionType: string | null;
+  decisionReason: string | null;
+  decidedByAdminId: string | null;
+  decidedAt: string | null;
   createdAt: string;
+  updatedAt: string;
+};
+
+export type ModerationCaseNoteRecord = {
+  id: string;
+  reportId: string;
+  authorAdminId: string;
+  body: string;
+  createdAt: string;
+};
+
+export type ModerationCaseEventRecord = {
+  id: string;
+  reportId: string;
+  actorId: string | null;
+  actorRole: string;
+  eventType: string;
+  summary: string;
+  metadata: string | null;
+  createdAt: string;
+};
+
+export type ModerationCaseMessageRecord = {
+  id: string;
+  reportId: string;
+  senderUserId: string;
+  senderRole: "admin" | "reporter" | "seller";
+  recipientUserId: string;
+  body: string;
+  createdAt: string;
+  readAt: string | null;
 };
 
 export type MarketplaceStoreData = {

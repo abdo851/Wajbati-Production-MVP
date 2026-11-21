@@ -54,27 +54,11 @@ export async function POST(request: Request) {
         ...body,
         city: typeof body.city === "string" && body.city.trim() ? body.city : current.user.city ?? "",
       },
-      // Approved sellers can publish visibly; admin can still hide/reject via moderation desk.
-      autoApprove: true,
+      // M0.1: every new listing stays pending until admin approval (no auto-approve).
+      autoApprove: false,
     });
 
-    if (listing.isPublished && listing.moderationStatus === "approved") {
-      try {
-        const { prisma } = await import("@/lib/db/prisma");
-        const follows = await prisma.follow.findMany({
-          where: { chefId: current.user.id },
-          select: { customerId: true },
-          take: 200,
-        });
-        await marketplaceStore.notifyFollowersOfListing({
-          followerUserIds: follows.map((row) => row.customerId),
-          listing,
-          kitchenName: current.user.kitchenName || "Kitchen",
-        });
-      } catch {
-        // Follow fan-out is best-effort; never block listing create on graph read failure.
-      }
-    }
+    // Follower notify happens only when a listing first becomes publicly eligible (on approve).
 
     return NextResponse.json({ listing }, { status: 201 });
   });

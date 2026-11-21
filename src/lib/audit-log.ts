@@ -12,7 +12,13 @@ export type AuditAction =
   | "settings.commission"
   | "admin.account_update"
   | "listing.moderation"
-  | "listing.report";
+  | "listing.report"
+  | "case.decision"
+  | "case.assign"
+  | "case.note"
+  | "case.message"
+  | "seller.suspend"
+  | "seller.reactivate";
 
 export type AuditEntry = {
   actorId: string;

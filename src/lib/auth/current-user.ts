@@ -37,12 +37,13 @@ async function payload(): Promise<SessionPayload | null> {
 }
 
 export async function getCurrentUser(): Promise<CurrentUser | null> {
+  // Local-dev-only admin preview: must win over any existing non-admin cookie so
+  // /admin does not show LoginCard while the preview banner is active.
+  // Gated in super-admin.ts (development + explicit flag + isolated righ_test only).
+  if (ADMIN_AUTH_BYPASSED) return { user: MOCK_ADMIN };
+
   const session = await payload();
-  if (!session) {
-    // Local-dev-only admin convenience; gated in super-admin.ts (never on Neon/production).
-    if (ADMIN_AUTH_BYPASSED) return { user: MOCK_ADMIN };
-    return null;
-  }
+  if (!session) return null;
   if (session.provider === "supabase") {
     if (!session.accessToken) return null;
     const user = await findUser(session.userId ?? "", session.accessToken);

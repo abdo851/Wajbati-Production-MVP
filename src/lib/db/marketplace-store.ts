@@ -106,6 +106,8 @@ function mapListing(row: PrismaListing): MarketplaceListingRecord {
     availability: availOut(row.availability),
     isPublished: row.isPublished,
     moderationStatus: modOut(row.moderationStatus),
+    moderationReason: row.moderationReason ?? null,
+    previouslyApprovedAt: row.previouslyApprovedAt ? row.previouslyApprovedAt.toISOString() : null,
     city: row.city,
     neighborhood: row.neighborhood ?? "",
     expiresAt: row.expiresAt ? row.expiresAt.toISOString() : null,
@@ -165,14 +167,50 @@ function mapNotification(row: PrismaNotification): AppNotificationRecord {
 }
 
 function mapReport(row: PrismaReport): ListingReportRecord {
-  const status = row.status === "resolved" || row.status === "dismissed" ? row.status : "open";
+  const rawStatus = row.status || "open";
+  const status: ListingReportRecord["status"] =
+    rawStatus === "resolved" ||
+    rawStatus === "dismissed" ||
+    rawStatus === "under_review" ||
+    rawStatus === "waiting_for_reporter" ||
+    rawStatus === "waiting_for_seller" ||
+    rawStatus === "action_required" ||
+    rawStatus === "reopened" ||
+    rawStatus === "open"
+      ? rawStatus
+      : "open";
+  const categoryRaw = row.category || "general";
+  const category: ListingReportRecord["category"] =
+    categoryRaw === "spam" ||
+    categoryRaw === "fraud" ||
+    categoryRaw === "inappropriate" ||
+    categoryRaw === "misleading" ||
+    categoryRaw === "other" ||
+    categoryRaw === "general"
+      ? categoryRaw
+      : "general";
+  const priorityRaw = row.priority || "normal";
+  const priority: ListingReportRecord["priority"] =
+    priorityRaw === "low" || priorityRaw === "normal" || priorityRaw === "high" || priorityRaw === "urgent"
+      ? priorityRaw
+      : "normal";
   return {
     id: row.id,
     listingId: row.listingId,
     reporterUserId: row.reporterUserId,
     reason: row.reason,
+    description: row.description ?? null,
+    category,
+    priority,
     status,
+    assignedAdminId: row.assignedAdminId ?? null,
+    assignedAt: row.assignedAt ? row.assignedAt.toISOString() : null,
+    decisionType: row.decisionType ?? null,
+    decisionReason: row.decisionReason ?? null,
+    decidedByAdminId: row.decidedByAdminId ?? null,
+    decidedAt: row.decidedAt ? row.decidedAt.toISOString() : null,
     createdAt: row.createdAt.toISOString(),
+    updatedAt: (row.updatedAt ?? row.createdAt).toISOString(),
   };
 }
 
@@ -298,7 +336,20 @@ export const marketplaceStore = {
       orderBy: { updatedAt: "desc" },
       take: 500,
     });
-    const mapped = rows.map(mapListing);
+    // D3: hide listings whose seller account is explicitly suspended/deleted.
+    // Sellers without a User row (legacy fixtures) remain visible.
+    const sellerIds = [...new Set(rows.map((row) => row.sellerUserId))];
+    const suspendedSellers = sellerIds.length
+      ? await prisma.user.findMany({
+          where: {
+            id: { in: sellerIds },
+            OR: [{ isActive: false }, { isDeleted: true }],
+          },
+          select: { id: true },
+        })
+      : [];
+    const suspendedSellerIds = new Set(suspendedSellers.map((row) => row.id));
+    const mapped = rows.filter((row) => !suspendedSellerIds.has(row.sellerUserId)).map(mapListing);
     const presenceRows = await prisma.sellerPresence.findMany({
       where: { sellerUserId: { in: [...new Set(mapped.map((row) => row.sellerUserId))] } },
     });
@@ -362,6 +413,7 @@ export const marketplaceStore = {
         availability: availIn(parsed.availability),
         isPublished: parsed.isPublished,
         moderationStatus: input.autoApprove ? "APPROVED" : "PENDING",
+        previouslyApprovedAt: input.autoApprove ? now : null,
         city: parsed.city,
         neighborhood: parsed.neighborhood,
         expiresAt: parsed.expiresAt ? new Date(parsed.expiresAt) : null,
@@ -439,7 +491,14 @@ export const marketplaceStore = {
     if (!existing) throw new StoreError("Listing not found.", 404);
     const row = await prisma.marketplaceListing.update({
       where: { id: listingId },
-      data: { moderationStatus: modIn(moderationStatus), updatedAt: new Date() },
+      data: {
+        moderationStatus: modIn(moderationStatus),
+        previouslyApprovedAt:
+          moderationStatus === "approved" && !existing.previouslyApprovedAt
+            ? new Date()
+            : existing.previouslyApprovedAt,
+        updatedAt: new Date(),
+      },
     });
     return mapListing(row);
   },
@@ -458,7 +517,9 @@ export const marketplaceStore = {
       where: {
         listingId: input.listingId,
         reporterUserId: input.reporterUserId,
-        status: "open",
+        status: {
+          in: ["open", "under_review", "waiting_for_reporter", "waiting_for_seller", "action_required", "reopened"],
+        },
       },
     });
     if (duplicate) throw new StoreError("You already reported this listing.", 409);
@@ -469,6 +530,8 @@ export const marketplaceStore = {
         reporterUserId: input.reporterUserId,
         reason,
         status: "open",
+        category: "general",
+        priority: "normal",
       },
     });
     return mapReport(row);
@@ -476,7 +539,14 @@ export const marketplaceStore = {
 
   async listOpenReports(): Promise<ListingReportRecord[]> {
     const prisma = await db();
-    const rows = await prisma.listingReport.findMany({ where: { status: "open" }, orderBy: { createdAt: "desc" } });
+    const rows = await prisma.listingReport.findMany({
+      where: {
+        status: {
+          in: ["open", "under_review", "waiting_for_reporter", "waiting_for_seller", "action_required", "reopened"],
+        },
+      },
+      orderBy: { createdAt: "desc" },
+    });
     return rows.map(mapReport);
   },
 
@@ -487,10 +557,12 @@ export const marketplaceStore = {
     const prisma = await db();
     const existing = await prisma.listingReport.findUnique({ where: { id: reportId } });
     if (!existing) throw new StoreError("Report not found.", 404);
-    if (existing.status !== "open") throw new StoreError("Report is already closed.", 409);
+    if (existing.status === "resolved" || existing.status === "dismissed") {
+      throw new StoreError("Report is already closed.", 409);
+    }
     const row = await prisma.listingReport.update({
       where: { id: reportId },
-      data: { status },
+      data: { status, updatedAt: new Date() },
     });
     return mapReport(row);
   },

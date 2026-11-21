@@ -304,26 +304,28 @@ enum ListingModerationStatus {
 }
 
 model MarketplaceListing {
-  id               String                  @id
-  chefProfileId    String                  @map("chef_profile_id")
-  sellerUserId     String                  @map("seller_user_id")
-  title            String
-  description      String                  @db.Text
-  category         String                  @default("home")
-  images           String[]                @default([])
-  kind             ListingKind             @default(PERMANENT)
-  priceMode        ListingPriceMode        @map("price_mode")
-  priceMad         Float?                  @map("price_mad")
-  availability     ListingAvailability     @default(AVAILABLE)
-  isPublished      Boolean                 @default(false) @map("is_published")
-  moderationStatus ListingModerationStatus @default(PENDING) @map("moderation_status")
-  city             String                  @default("")
-  neighborhood     String                  @default("")
-  expiresAt        DateTime?               @map("expires_at")
-  isDeleted        Boolean                 @default(false) @map("is_deleted")
-  isActive         Boolean                 @default(true) @map("is_active")
-  createdAt        DateTime                @default(now()) @map("created_at")
-  updatedAt        DateTime                @updatedAt @map("updated_at")
+  id                   String                  @id
+  chefProfileId        String                  @map("chef_profile_id")
+  sellerUserId         String                  @map("seller_user_id")
+  title                String
+  description          String                  @db.Text
+  category             String                  @default("home")
+  images               String[]                @default([])
+  kind                 ListingKind             @default(PERMANENT)
+  priceMode            ListingPriceMode        @map("price_mode")
+  priceMad             Float?                  @map("price_mad")
+  availability         ListingAvailability     @default(AVAILABLE)
+  isPublished          Boolean                 @default(false) @map("is_published")
+  moderationStatus     ListingModerationStatus @default(PENDING) @map("moderation_status")
+  moderationReason     String?                 @map("moderation_reason") @db.Text
+  previouslyApprovedAt DateTime?               @map("previously_approved_at")
+  city                 String                  @default("")
+  neighborhood         String                  @default("")
+  expiresAt            DateTime?               @map("expires_at")
+  isDeleted            Boolean                 @default(false) @map("is_deleted")
+  isActive             Boolean                 @default(true) @map("is_active")
+  createdAt            DateTime                @default(now()) @map("created_at")
+  updatedAt            DateTime                @updatedAt @map("updated_at")
 
   @@index([chefProfileId])
   @@index([sellerUserId])
@@ -387,13 +389,70 @@ model AppNotification {
 }
 
 model ListingReport {
-  id        String   @id
-  listingId String   @map("listing_id")
-  reporterUserId String @map("reporter_user_id")
-  reason    String   @db.Text
-  status    String   @default("open")
-  createdAt DateTime @default(now()) @map("created_at")
+  id               String    @id
+  listingId        String    @map("listing_id")
+  reporterUserId   String    @map("reporter_user_id")
+  reason           String    @db.Text
+  description      String?   @db.Text
+  category         String    @default("general")
+  priority         String    @default("normal")
+  status           String    @default("open")
+  assignedAdminId  String?   @map("assigned_admin_id")
+  assignedAt       DateTime? @map("assigned_at")
+  decisionType     String?   @map("decision_type")
+  decisionReason   String?   @map("decision_reason") @db.Text
+  decidedByAdminId String?   @map("decided_by_admin_id")
+  decidedAt        DateTime? @map("decided_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+  notes            ModerationCaseNote[]
+  events           ModerationCaseEvent[]
+  messages         ModerationCaseMessage[]
 
   @@index([listingId])
   @@index([status])
+  @@index([status, updatedAt])
+  @@index([assignedAdminId])
+}
+
+/// Admin-only investigation notes for a listing report case.
+model ModerationCaseNote {
+  id            String   @id
+  reportId      String   @map("report_id")
+  report        ListingReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  authorAdminId String   @map("author_admin_id")
+  body          String   @db.Text
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@index([reportId, createdAt])
+}
+
+/// Authoritative investigation timeline for a listing report case.
+model ModerationCaseEvent {
+  id        String   @id
+  reportId  String   @map("report_id")
+  report    ListingReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  actorId   String?  @map("actor_id")
+  actorRole String   @map("actor_role")
+  eventType String   @map("event_type")
+  summary   String   @db.Text
+  metadata  String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([reportId, createdAt])
+}
+
+/// Case-scoped two-way messaging (not Marketplace inbox).
+model ModerationCaseMessage {
+  id              String    @id
+  reportId        String    @map("report_id")
+  report          ListingReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  senderUserId    String    @map("sender_user_id")
+  senderRole      String    @map("sender_role")
+  recipientUserId String    @map("recipient_user_id")
+  body            String    @db.Text
+  createdAt       DateTime  @default(now()) @map("created_at")
+  readAt          DateTime? @map("read_at")
+
+  @@index([reportId, createdAt])
 }

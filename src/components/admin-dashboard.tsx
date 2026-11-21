@@ -2,10 +2,28 @@
 
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import toast from "react-hot-toast";
+import {
+  AdminComingSoon,
+  AdminPageContainer,
+  AdminPageHeader,
+  AdminSectionHeading,
+  AdminStateBlock,
+  adminQuietButtonClass,
+} from "@/components/admin/admin-chrome";
+import {
+  DEFAULT_ADMIN_SECTION,
+  getAdminNavItem,
+  isAdminSectionId,
+  type AdminSectionId,
+} from "@/components/admin/admin-nav";
+import { AdminShell } from "@/components/admin/admin-shell";
 import { AdminChat } from "@/components/chat-panel";
 import { AdminSettings } from "@/components/admin-settings";
 import { LoginCard } from "@/components/login-card";
-import { MarketplaceAdminPanel } from "@/components/marketplace-admin-panel";
+import { MarketplaceCasesPanel } from "@/components/admin/marketplace-cases-panel";
+import { MarketplaceListingsPanel } from "@/components/admin/marketplace-listings-panel";
+import { MarketplaceOverviewPanel } from "@/components/admin/marketplace-overview-panel";
+import { MarketplaceSellersPanel } from "@/components/admin/marketplace-sellers-panel";
 import { ReviewModal, type ReviewView } from "@/components/review-modal";
 import { useI18n } from "@/components/language";
 import { LiveDot, inputClass, primaryButtonClass, quietButtonClass, StatusPill } from "@/components/ui";
@@ -28,176 +46,270 @@ function notify(message: string, tone: "ok" | "warn" = "ok") {
   toast.success(message);
 }
 
-export function AdminDashboard() {
+export function AdminDashboard({ localPreviewActive = false }: { localPreviewActive?: boolean } = {}) {
   const { t } = useI18n();
   const { session, reload } = useSession();
+
+  // Server-proven local preview gate (same condition as the red banner). Do not rely on
+  // client-readable env; skip LoginCard while the isolated preview mechanism is active.
+  if (localPreviewActive) {
+    const previewName = session?.user?.fullName || "مدير المنصة (وضع الاختبار)";
+    return <Desk name={previewName} onLogout={reload} />;
+  }
 
   if (!session) return <p className="px-4 py-16 text-sm text-muted">{t("admin.loading")}</p>;
   if (!session.user || !isSuperAdmin(session.user)) return <LoginCard desk="admin" onSuccess={reload} />;
   return <Desk name={session.user.fullName} onLogout={reload} />;
 }
 
+function readInitialSection(): AdminSectionId {
+  if (typeof window === "undefined") return DEFAULT_ADMIN_SECTION;
+  try {
+    const value = new URLSearchParams(window.location.search).get("section");
+    if (isAdminSectionId(value)) return value;
+  } catch {
+    /* ignore */
+  }
+  return DEFAULT_ADMIN_SECTION;
+}
+
+function readQueryParam(key: string): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return new URLSearchParams(window.location.search).get(key);
+  } catch {
+    return null;
+  }
+}
+
 function Desk({ name, onLogout }: { name: string; onLogout: () => Promise<void> }) {
   const { t } = useI18n();
   const { data, error, loading, reconnecting, reload } = useLiveQuery<AdminOverview>("/api/admin/overview");
-  const [tab, setTab] = useState<
-    "orders" | "chefs" | "market" | "drivers" | "history" | "emails" | "messages" | "users" | "settings"
-  >("orders");
+  const [section, setSection] = useState<AdminSectionId>(DEFAULT_ADMIN_SECTION);
   const [range, setRange] = useState<DateRange>("all");
   const [refreshKey, setRefreshKey] = useState(0);
-  const tabs = [
-    ["orders", t("admin.tabOrders")],
-    ["chefs", t("admin.tabChefs")],
-    ["market", t("admin.marketTitle")],
-    ["drivers", t("admin.tabDrivers")],
-    ["history", t("admin.tabHistory")],
-    ["users", t("admin.tabUsers")],
-    ["emails", t("admin.tabEmails")],
-    ["messages", t("admin.tabMessages")],
-    ["settings", t("admin.tabSettings")],
-  ] as const;
+  const [deepCaseId, setDeepCaseId] = useState<string | null>(null);
+  const [deepListingId, setDeepListingId] = useState<string | null>(null);
+  const [deepSellerId, setDeepSellerId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      const next = readInitialSection();
+      setSection((current) => (current === next ? current : next));
+      setDeepCaseId(readQueryParam("caseId"));
+      setDeepListingId(readQueryParam("listingId"));
+      setDeepSellerId(readQueryParam("sellerId"));
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      try {
+        const url = new URL(window.location.href);
+        url.searchParams.set("section", section);
+        window.history.replaceState({}, "", `${url.pathname}${url.search}`);
+      } catch {
+        /* ignore */
+      }
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [section]);
 
   async function logout() {
     await fetch("/api/auth/logout", { method: "POST" });
     await onLogout();
   }
 
+  function refreshAll() {
+    void reload();
+    setRefreshKey((value) => value + 1);
+  }
+
+  const navItem = getAdminNavItem(section);
+  const needsLegacyOverview =
+    section === "legacy-orders" || section === "legacy-drivers" || section === "legacy-history";
+  const showRange =
+    section === "sellers" || section === "legacy-orders" || section === "legacy-drivers" || section === "legacy-history";
+
+  const sectionSubtitle =
+    section === "overview"
+      ? t("admin.cc.overviewSubtitle")
+      : section === "legacy-orders" && data
+        ? `${formatServiceDate(data.serviceDate)} · ${t("admin.platformRevenue", { amount: formatMad(data.platformRevenueMad) })}`
+        : section === "conversations"
+          ? t("admin.cc.conversationsNote")
+          : undefined;
+
   return (
-    <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-10 sm:px-6">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <p className="text-sm font-medium text-olive">{t("admin.kicker")}</p>
-          <h1 className="mt-1 font-display text-3xl sm:text-4xl">{t("admin.title")}</h1>
-          <p className="mt-2 text-sm text-muted">
-            {name}
-            {data ? ` · ${formatServiceDate(data.serviceDate)}` : ""}
-          </p>
-          {data ? (
-            <p className="mt-1 text-sm font-semibold text-gold-deep">
-              {t("admin.platformRevenue", { amount: formatMad(data.platformRevenueMad) })}
-            </p>
-          ) : null}
-        </div>
-        <div className="flex items-center gap-3">
-          <LiveDot />
-          <button type="button" className={quietButtonClass} onClick={() => { void reload(); setRefreshKey((value) => value + 1); }}>
-            {t("admin.refresh")}
-          </button>
-          <button type="button" className={quietButtonClass} onClick={() => void logout()}>
-            {t("menu.signOut")}
-          </button>
-        </div>
-      </div>
-
-      {error ? (
-        <p role="alert" className="mt-4 text-sm text-terracotta-deep">
-          {error}
-        </p>
-      ) : null}
-      {reconnecting && data ? <p className="mt-4 text-sm text-muted">{t("live.reconnecting")}</p> : null}
-      <div className="mt-6 flex flex-wrap gap-2">
-        {tabs.map(([id, label]) => (
-          <button key={id} type="button" className={tab === id ? primaryButtonClass : quietButtonClass} onClick={() => setTab(id)}>
-            {label}
-          </button>
-        ))}
-      </div>
-      {tab === "orders" || tab === "chefs" || tab === "drivers" || tab === "history" ? <RangeBar value={range} onChange={setRange} /> : null}
-
-      {(loading || reconnecting) && !data && tab !== "emails" && tab !== "chefs" ? (
-        <p className="mt-8 text-sm text-muted">{reconnecting ? t("live.reconnecting") : t("admin.loading")}</p>
-      ) : null}
-
-      {tab === "orders" && data ? (
-        <>
-          <div className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            <Books label={t("admin.today")} books={data.todayBooks} />
-          </div>
-          <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            <Books label={t("admin.week")} books={data.weekBooks} />
-          </div>
-          <CommissionEditor
-            chefMad={data.chefWalletCommissionMad}
-            driverMad={data.driverWalletCommissionMad}
-            onSaved={() => void reload()}
-          />
-          <p className="mt-3 text-sm text-muted">{t("admin.booksNote")}</p>
-
-          <section className="mt-8">
-            <h2 className="font-display text-2xl">{t("admin.kitchens")}</h2>
-            <ul className="mt-3 space-y-3 sm:hidden">
-              {data.kitchens.map((kitchen) => (
-                <li key={kitchen.chefId} className="rounded-3xl border border-line bg-card p-4 text-sm">
-                  <p className="font-medium">{kitchen.kitchenName}</p>
-                  <p className="text-xs text-muted">{kitchen.city}</p>
-                  <dl className="mt-3 grid grid-cols-2 gap-2">
-                    <div>
-                      <dt className="text-xs text-muted">{t("admin.orders")}</dt>
-                      <dd>{kitchen.orders}</dd>
-                    </div>
-                    <div>
-                      <dt className="text-xs text-muted">{t("admin.portions")}</dt>
-                      <dd>{kitchen.portions}</dd>
-                    </div>
-                    <div>
-                      <dt className="text-xs text-muted">{t("admin.revenue")}</dt>
-                      <dd>{formatMad(kitchen.revenueMad)}</dd>
-                    </div>
-                    <div>
-                      <dt className="text-xs text-muted">{t("admin.commission")}</dt>
-                      <dd>{formatMad(kitchen.commissionMad)}</dd>
-                    </div>
-                  </dl>
-                  <p className="mt-2 text-xs text-muted">{t("admin.chefKeepsLine", { amount: formatMad(kitchen.payoutMad) })}</p>
-                </li>
-              ))}
-            </ul>
-            <div className="mt-3 hidden overflow-x-auto rounded-3xl border border-line bg-card sm:block">
-              <table className="w-full min-w-[40rem] text-start text-sm">
-                <thead className="text-muted">
-                  <tr className="border-b border-line">
-                    <th className="px-2 py-1 text-xs font-medium">{t("admin.kitchen")}</th>
-                    <th className="px-2 py-1 text-xs font-medium">{t("admin.orders")}</th>
-                    <th className="px-2 py-1 text-xs font-medium">{t("admin.portions")}</th>
-                    <th className="px-2 py-1 text-xs font-medium">{t("admin.revenue")}</th>
-                    <th className="px-2 py-1 text-xs font-medium">{t("admin.commission")}</th>
-                    <th className="px-2 py-1 text-xs font-medium">{t("admin.chefKeeps")}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.kitchens.map((kitchen) => (
-                    <tr key={kitchen.chefId} className="border-b border-line last:border-0">
-                      <td className="px-2 py-1 text-xs">
-                        <span className="block font-medium">{kitchen.kitchenName}</span>
-                        <span className="text-xs text-muted">{kitchen.city}</span>
-                      </td>
-                      <td className="px-2 py-1 text-xs">{kitchen.orders}</td>
-                      <td className="px-2 py-1 text-xs">{kitchen.portions}</td>
-                      <td className="px-2 py-1 text-xs">{formatMad(kitchen.revenueMad)}</td>
-                      <td className="px-2 py-1 text-xs">{formatMad(kitchen.commissionMad)}</td>
-                      <td className="px-2 py-1 text-xs">{formatMad(kitchen.payoutMad)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+    <AdminShell
+      section={section}
+      onSectionChange={setSection}
+      adminName={name}
+      onLogout={() => void logout()}
+      onRefresh={refreshAll}
+      reconnecting={reconnecting && Boolean(data)}
+    >
+      <AdminPageContainer>
+        <AdminPageHeader
+          section={section}
+          subtitle={sectionSubtitle}
+          actions={
+            <div className="flex items-center gap-2">
+              <LiveDot />
+              <button type="button" className={adminQuietButtonClass} onClick={refreshAll}>
+                {t("admin.refresh")}
+              </button>
             </div>
-          </section>
+          }
+        />
 
-          <section className="mt-8">
-            <h2 className="font-display text-2xl">{t("admin.recent")}</h2>
-            <ul className="mt-3 space-y-3 sm:hidden">
-              {data.recentOrders.filter((order) => matchesCasablancaRange(order.createdAt, range)).map((order) => (
-                <li key={order.id} className="rounded-3xl border border-line bg-card p-4 text-sm">
-                  <div className="flex items-start justify-between gap-3">
-                    <p className="font-medium">
-                      {order.quantity} × {order.mealTitle}
-                    </p>
-                    <StatusPill status={order.status} />
-                  </div>
-                  <p className="mt-1">{order.kitchenName}</p>
-                  <dl className="mt-2 space-y-1">
-                    <div>
-                      <dt className="text-xs text-muted">{t("order.name")}</dt>
+        {error ? (
+          <p role="alert" className="mb-4 text-sm text-red-700">
+            {error}
+          </p>
+        ) : null}
+
+        {showRange ? <RangeBar value={range} onChange={setRange} /> : null}
+
+        {(loading || reconnecting) && !data && needsLegacyOverview ? (
+          <AdminStateBlock tone="loading" title={reconnecting ? t("live.reconnecting") : t("admin.loading")} />
+        ) : null}
+
+        {navItem.status === "soon" ? (
+          <AdminComingSoon
+            descriptionKey={
+              section === "buyers"
+                ? "admin.cc.soon.buyers"
+                : section === "categories"
+                  ? "admin.cc.soon.categories"
+                  : section === "conversations"
+                    ? "admin.cc.soon.conversations"
+                    : section === "notifications"
+                      ? "admin.cc.soon.notifications"
+                      : section === "audit"
+                        ? "admin.cc.soon.audit"
+                        : section === "content"
+                          ? "admin.cc.soon.content"
+                          : undefined
+            }
+          />
+        ) : null}
+
+        {section === "overview" ? <MarketplaceOverviewPanel onOpen={setSection} /> : null}
+        {section === "sellers" ? (
+          <div className="mt-2 space-y-6">
+            <MarketplaceSellersPanel initialSellerId={deepSellerId} />
+            <PendingChefs refreshKey={refreshKey} range={range} onToast={notify} />
+          </div>
+        ) : null}
+        {section === "listings" ? (
+          <div className="mt-2">
+            <MarketplaceListingsPanel initialListingId={deepListingId} />
+          </div>
+        ) : null}
+        {section === "reports" ? (
+          <div className="mt-2">
+            <MarketplaceCasesPanel initialCaseId={deepCaseId} />
+          </div>
+        ) : null}
+        {section === "settings" ? (
+          <div className="mt-2">
+            <AdminSettings />
+          </div>
+        ) : null}
+
+        {section === "legacy-orders" && data ? (
+          <div className="mt-2 rounded-xl border border-amber-200/80 bg-amber-50/30 p-4 sm:p-5">
+            <AdminSectionHeading title={t("admin.cc.nav.legacyOrders")} description={t("admin.cc.legacyOrdersHint")} />
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+              <Books label={t("admin.today")} books={data.todayBooks} />
+            </div>
+            <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+              <Books label={t("admin.week")} books={data.weekBooks} />
+            </div>
+            <CommissionEditor
+              chefMad={data.chefWalletCommissionMad}
+              driverMad={data.driverWalletCommissionMad}
+              onSaved={() => void reload()}
+            />
+            <p className="mt-3 text-sm text-muted">{t("admin.booksNote")}</p>
+
+            <section className="mt-8">
+              <h2 className="font-display text-2xl">{t("admin.kitchens")}</h2>
+              <ul className="mt-3 space-y-3 sm:hidden">
+                {data.kitchens.map((kitchen) => (
+                  <li key={kitchen.chefId} className="rounded-3xl border border-line bg-card p-4 text-sm">
+                    <p className="font-medium">{kitchen.kitchenName}</p>
+                    <p className="text-xs text-muted">{kitchen.city}</p>
+                    <dl className="mt-3 grid grid-cols-2 gap-2">
+                      <div>
+                        <dt className="text-xs text-muted">{t("admin.orders")}</dt>
+                        <dd>{kitchen.orders}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-xs text-muted">{t("admin.portions")}</dt>
+                        <dd>{kitchen.portions}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-xs text-muted">{t("admin.revenue")}</dt>
+                        <dd>{formatMad(kitchen.revenueMad)}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-xs text-muted">{t("admin.commission")}</dt>
+                        <dd>{formatMad(kitchen.commissionMad)}</dd>
+                      </div>
+                    </dl>
+                    <p className="mt-2 text-xs text-muted">{t("admin.chefKeepsLine", { amount: formatMad(kitchen.payoutMad) })}</p>
+                  </li>
+                ))}
+              </ul>
+              <div className="mt-3 hidden overflow-x-auto rounded-3xl border border-line bg-card sm:block">
+                <table className="w-full min-w-[40rem] text-start text-sm">
+                  <thead className="text-muted">
+                    <tr className="border-b border-line">
+                      <th className="px-2 py-1 text-xs font-medium">{t("admin.kitchen")}</th>
+                      <th className="px-2 py-1 text-xs font-medium">{t("admin.orders")}</th>
+                      <th className="px-2 py-1 text-xs font-medium">{t("admin.portions")}</th>
+                      <th className="px-2 py-1 text-xs font-medium">{t("admin.revenue")}</th>
+                      <th className="px-2 py-1 text-xs font-medium">{t("admin.commission")}</th>
+                      <th className="px-2 py-1 text-xs font-medium">{t("admin.chefKeeps")}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.kitchens.map((kitchen) => (
+                      <tr key={kitchen.chefId} className="border-b border-line last:border-0">
+                        <td className="px-2 py-1 text-xs">
+                          <span className="block font-medium">{kitchen.kitchenName}</span>
+                          <span className="text-xs text-muted">{kitchen.city}</span>
+                        </td>
+                        <td className="px-2 py-1 text-xs">{kitchen.orders}</td>
+                        <td className="px-2 py-1 text-xs">{kitchen.portions}</td>
+                        <td className="px-2 py-1 text-xs">{formatMad(kitchen.revenueMad)}</td>
+                        <td className="px-2 py-1 text-xs">{formatMad(kitchen.commissionMad)}</td>
+                        <td className="px-2 py-1 text-xs">{formatMad(kitchen.payoutMad)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+
+            <section className="mt-8">
+              <h2 className="font-display text-2xl">{t("admin.recent")}</h2>
+              <ul className="mt-3 space-y-3 sm:hidden">
+                {data.recentOrders.filter((order) => matchesCasablancaRange(order.createdAt, range)).map((order) => (
+                  <li key={order.id} className="rounded-3xl border border-line bg-card p-4 text-sm">
+                    <div className="flex items-start justify-between gap-3">
+                      <p className="font-medium">
+                        {order.quantity} × {order.mealTitle}
+                      </p>
+                      <StatusPill status={order.status} />
+                    </div>
+                    <p className="mt-1">{order.kitchenName}</p>
+                    <dl className="mt-2 space-y-1">
+                      <div>
+                        <dt className="text-xs text-muted">{t("order.name")}</dt>
                       <dd className="font-medium">{order.customerName}</dd>
                     </div>
                     <div>
@@ -260,18 +372,30 @@ function Desk({ name, onLogout }: { name: string; onLogout: () => Promise<void> 
             </div>
           </section>
 
-          <ActiveTrips deliveries={data.activeDeliveries.filter((trip) => matchesCasablancaRange(trip.createdAt, range))} />
-        </>
-      ) : null}
-      {tab === "chefs" ? <div className="mt-8"><PendingChefs refreshKey={refreshKey} range={range} onToast={notify} /></div> : null}
-      {tab === "market" ? <div className="mt-8"><MarketplaceAdminPanel /></div> : null}
-      {tab === "drivers" && data ? <DriverDesk drivers={data.drivers} range={range} onChanged={() => void reload()} onToast={notify} /> : null}
-      {tab === "history" && data ? <HistoryDesk refreshKey={refreshKey} drivers={data.drivers} range={range} onChanged={() => void reload()} onToast={notify} /> : null}
-      {tab === "users" ? <AllUsers /> : null}
-      {tab === "emails" ? <EmailCaptures /> : null}
-      {tab === "messages" ? <AdminChat /> : null}
-      {tab === "settings" ? <AdminSettings /> : null}
-    </main>
+            <ActiveTrips deliveries={data.activeDeliveries.filter((trip) => matchesCasablancaRange(trip.createdAt, range))} />
+          </div>
+        ) : null}
+
+        {section === "legacy-drivers" && data ? (
+          <div className="mt-2 rounded-xl border border-amber-200/80 bg-amber-50/30 p-4 sm:p-5">
+            <DriverDesk drivers={data.drivers} range={range} onChanged={() => void reload()} onToast={notify} />
+          </div>
+        ) : null}
+        {section === "legacy-history" && data ? (
+          <div className="mt-2 rounded-xl border border-amber-200/80 bg-amber-50/30 p-4 sm:p-5">
+            <HistoryDesk refreshKey={refreshKey} drivers={data.drivers} range={range} onChanged={() => void reload()} onToast={notify} />
+          </div>
+        ) : null}
+        {section === "legacy-users" ? <AllUsers /> : null}
+        {section === "legacy-emails" ? <EmailCaptures /> : null}
+        {section === "legacy-messages" ? (
+          <div className="mt-2 rounded-xl border border-amber-200/80 bg-amber-50/30 p-4 sm:p-5">
+            <AdminSectionHeading title={t("admin.cc.nav.legacyMessages")} description={t("admin.cc.legacyMessagesHint")} />
+            <AdminChat />
+          </div>
+        ) : null}
+      </AdminPageContainer>
+    </AdminShell>
   );
 }
 

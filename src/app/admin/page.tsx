@@ -6,11 +6,13 @@ export default function AdminPage() {
     <>
       {ADMIN_AUTH_BYPASSED ? (
         <p className="fixed inset-x-0 top-0 z-[300] bg-red-600 px-4 py-2 text-center text-sm font-bold text-white">
-          ⚠️ وضع الاختبار المحلي: لوحة التحكم غير محمية هنا فقط. الحماية تبقى إلزامية في الإنتاج.
+          Temporary local admin preview is active (RIGH_LOCAL_ADMIN_PREVIEW). UI-only convenience on
+          isolated righ_test — production auth and API checks stay mandatory elsewhere. Disable the
+          flag to restore the login screen.
         </p>
       ) : null}
       <div className={ADMIN_AUTH_BYPASSED ? "pt-9" : undefined}>
-        <AdminDashboard />
+        <AdminDashboard localPreviewActive={ADMIN_AUTH_BYPASSED} />
       </div>
     </>
   );
